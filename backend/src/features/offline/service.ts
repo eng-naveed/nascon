@@ -1,0 +1,94 @@
+import { z } from 'zod';
+import { pool, tx } from '../../core/db';
+import { AppError } from '../../core/errors';
+import { bodyHash } from '../../core/crypto';
+import { idSchema, parse } from '../../core/validate';
+import { appendEvent, loadEvents } from '../events/service';
+import { rosterVersion, transfer } from '../roster/service';
+
+const envelope = z.object({
+  device_id: z.string().min(1).max(100),
+  actions: z
+    .array(
+      z.object({
+        action_id: z.string().min(1).max(100),
+        type: z.enum(['score_event', 'roster_transfer']),
+        queued_at: z.string().min(1).max(40).refine((s) => !Number.isNaN(Date.parse(s)), 'bad ts'),
+        base_version: z.number().int().min(0),
+        payload: z.record(z.string(), z.any()),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
+
+interface Result {
+  action_id: string;
+  status: 'applied' | 'rejected' | 'duplicate';
+  resolution: string;
+  error_code: string | null;
+  processed_order: number;
+  server_version: number;
+  signature: string | null;
+}
+
+async function currentVersion(type: string, payload: any): Promise<number | null> {
+  if (type === 'score_event') {
+    const m = await pool.query('SELECT 1 FROM matches WHERE match_id=$1', [String(payload.match_id)]);
+    if (!m.rowCount) return null;
+    return (await loadEvents(pool, String(payload.match_id))).length;
+  }
+  const p = await pool.query('SELECT 1 FROM roster_players WHERE player_id=$1', [String(payload.player_id)]);
+  if (!p.rowCount) return null;
+  return rosterVersion(pool, String(payload.player_id));
+}
+
+export async function offlineSync(rawBody: unknown) {
+  const body = parse(envelope, rawBody);
+  const order = body.actions.map((a, i) => ({ a, i })).sort((x, y) => Date.parse(x.a.queued_at) - Date.parse(y.a.queued_at) || x.i - y.i);
+  const results = new Map<number, Result>();
+  let n = 0;
+  for (const { a, i } of order) {
+    n++;
+    const done = await pool.query('SELECT 1 FROM sync_actions WHERE device_id=$1 AND action_id=$2', [body.device_id, a.action_id]);
+    const base = { action_id: a.action_id, processed_order: n };
+    const ver = async () => (await currentVersion(a.type, a.payload)) ?? 0;
+    if (done.rowCount) {
+      results.set(i, { ...base, status: 'duplicate', resolution: 'skipped_duplicate', error_code: null, server_version: await ver(), signature: null });
+      continue;
+    }
+    let res: Result;
+    try {
+      if (a.type === 'score_event' && a.payload.event_id) {
+        const same = await pool.query('SELECT body_hash FROM events WHERE event_id=$1', [String(a.payload.event_id)]);
+        const h = bodyHash({ match_id: a.payload.match_id, type: a.payload.type, payload: a.payload.payload ?? {} });
+        if (same.rowCount && same.rows[0].body_hash === h) {
+          results.set(i, { ...base, status: 'duplicate', resolution: 'skipped_duplicate', error_code: null, server_version: await ver(), signature: null });
+          await pool.query('INSERT INTO sync_actions VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [body.device_id, a.action_id, JSON.stringify({ duplicate: true })]);
+          continue;
+        }
+      }
+      const cur = await currentVersion(a.type, a.payload);
+      if (cur === null) {
+        const id = a.type === 'score_event' ? 'MATCH_NOT_FOUND' : 'PLAYER_NOT_FOUND';
+        throw new AppError(404, id, 'Referenced id not found.');
+      }
+      if (a.base_version > cur) throw new AppError(409, 'INVALID_BASE_VERSION', 'The device version is ahead of the server.');
+      const r = await tx((c) => (a.type === 'score_event' ? appendEvent(c, a.payload) : transfer(c, a.payload)));
+      res = {
+        ...base, status: 'applied', resolution: a.base_version < cur ? 'rebased_append' : 'appended', error_code: null,
+        server_version: await ver(), signature: a.type === 'score_event' ? (r.body.signature as string) : null,
+      };
+    } catch (e) {
+      if (!(e instanceof AppError)) throw e;
+      res = { ...base, status: 'rejected', resolution: 'server_wins', error_code: e.code, server_version: await ver(), signature: null };
+    }
+    await pool.query('INSERT INTO sync_actions VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [body.device_id, a.action_id, JSON.stringify(res)]);
+    results.set(i, res);
+  }
+  const list = body.actions.map((_, i) => results.get(i)!);
+  const summary = { applied: 0, rejected: 0, duplicate: 0 };
+  for (const r of list) summary[r.status]++;
+  return { device_id: body.device_id, results: list, summary };
+}
+void idSchema;
