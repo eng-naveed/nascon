@@ -1,4 +1,10 @@
-import { C } from '@/theme';
+import { C, F } from '@/theme';
+import { Ionicons } from '@expo/vector-icons';
+
+function fmtHM(iso: string) {
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 import React from 'react';
 import { Alert, Text, View } from 'react-native';
 import { friendlyCode } from '@/api/client';
@@ -12,6 +18,14 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 
 export default function SyncScreen() {
   const { online, syncing, queue, results, sync, lastSyncMsg, clearResults } = useApp();
+  // Latest sync = the newest batch of results (all rows of one sync share the same timestamp).
+  const lastAt = results.reduce<string | null>((a, r) => (!a || r.at > a ? r.at : a), null);
+  const latest = results.filter((r) => r.at === lastAt);
+  const counts = {
+    applied: latest.filter((r) => r.status === 'applied').length,
+    rejected: latest.filter((r) => r.status === 'rejected').length,
+    duplicate: latest.filter((r) => r.status === 'duplicate').length,
+  };
   return (
     <Screen testID="screen-sync">
       <Card testID="sync-summary">
@@ -19,6 +33,29 @@ export default function SyncScreen() {
         <Text style={T.sub}>{online ? 'Connected to the server.' : 'No connection. Actions you make are saved on this device and sent later.'}</Text>
       </Card>
       {lastSyncMsg ? <ErrorBanner kind="ok" message={lastSyncMsg} /> : null}
+      {lastAt ? (
+        <Card testID="sync-last-summary">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="time-outline" size={18} color={C.sub} />
+            <Text style={{ color: C.text, fontSize: 16, fontWeight: '700' }} testID="sync-last-time">Last synced {fmtHM(lastAt)}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {[
+              { n: counts.applied, t: 'Applied', fg: C.ok, bg: C.okBg, icon: 'checkmark-circle' as const },
+              { n: counts.rejected, t: 'Rejected', fg: C.bad, bg: C.badBg, icon: 'close-circle' as const },
+              { n: counts.duplicate, t: 'Already recorded', fg: C.info, bg: C.infoBg, icon: 'copy' as const },
+            ].map((x) => (
+              <View key={x.t} style={{ flex: 1, alignItems: 'center', gap: 2, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 12, backgroundColor: x.bg }} accessible accessibilityLabel={`${x.n} ${x.t}`} testID={`sync-count-${x.t.split(' ')[0].toLowerCase()}`}>
+                <Text style={{ fontSize: 28, fontFamily: F.displayHeavy, color: x.fg }}>{x.n}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name={x.icon} size={13} color={x.fg} />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: x.fg, textAlign: 'center', flexShrink: 1 }}>{x.t}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
       <Button
         label={syncing ? 'Syncing…' : 'Sync now'}
         icon="sync"
@@ -45,9 +82,10 @@ export default function SyncScreen() {
       {results.length === 0 ? <EmptyState title="No results yet" hint="After a sync, each action shows whether it was applied or rejected." icon="list-outline" /> : null}
       {results.map((r) => (
         <Card key={r.action_id} testID={`result-${r.action_id}`}>
-          {r.status === 'applied' ? <Badge kind="ok" icon="checkmark-circle" text="Applied" /> : r.status === 'duplicate' ? <Badge kind="info" icon="copy" text="Already done" /> : <Badge kind="bad" icon="close-circle" text="Rejected" />}
+          {r.status === 'applied' ? <Badge kind="ok" icon="checkmark-circle" text="Applied" /> : r.status === 'duplicate' ? <Badge kind="info" icon="copy" text="Already recorded" /> : <Badge kind="bad" icon="close-circle" text="Rejected" />}
           <Text style={T.body}>{r.summary}</Text>
           {r.status === 'rejected' ? <Text style={T.sub}>Reason: {friendlyCode(r.error_code)} The server's version was kept.</Text> : null}
+          {r.status === 'duplicate' ? <Text style={T.sub}>The server already had this action, so nothing changed.</Text> : null}
           {r.status === 'applied' && r.resolution === 'rebased_append' ? <Text style={T.sub}>Applied after newer changes on the server.</Text> : null}
         </Card>
       ))}

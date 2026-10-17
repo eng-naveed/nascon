@@ -1,25 +1,33 @@
-import React from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Skeleton } from './feedback';
 import { C, F, S } from '@/theme';
 import { useApp } from '@/state/app';
 
 export function Screen({
   children, loading, onRefresh, testID, footer,
-}: { children: React.ReactNode; loading?: boolean; onRefresh?: () => void; testID?: string; footer?: React.ReactNode }) {
+}: { children: React.ReactNode; loading?: boolean; onRefresh?: () => void | Promise<unknown>; testID?: string; footer?: React.ReactNode }) {
   const { primary } = useApp();
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      // Keep the spinner up long enough to be noticed, and until the reload finishes.
+      await Promise.all([Promise.resolve(onRefresh()), new Promise((r) => setTimeout(r, 700))]);
+    } catch {}
+    setRefreshing(false);
+  }, [onRefresh]);
   return (
     <View style={s.root} testID={testID}>
       <ScrollView
         contentContainerStyle={s.c}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        refreshControl={onRefresh ? <RefreshControl refreshing={false} onRefresh={onRefresh} /> : undefined}
+        refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={primary} colors={[primary]} progressBackgroundColor={C.card} title={refreshing ? 'Refreshing…' : undefined} titleColor={C.sub} /> : undefined}
       >
         {loading ? (
-          <View style={s.load} testID="loading-indicator" accessible accessibilityLabel="Loading">
-            <ActivityIndicator size="large" color={primary} />
-            <Text style={s.lt}>Loading…</Text>
-          </View>
+          <Skeleton />
         ) : (
           children
         )}
@@ -42,7 +50,5 @@ export const T = {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   c: { padding: S.lg, gap: S.md, paddingBottom: 120 },
-  load: { padding: 40, alignItems: 'center', gap: 8 },
-  lt: { fontSize: 16, color: C.sub },
   h: { fontSize: 28, fontFamily: F.displayHeavy, color: C.text, letterSpacing: 0.6, textTransform: 'uppercase' },
 });

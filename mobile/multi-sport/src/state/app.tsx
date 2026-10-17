@@ -7,6 +7,7 @@ import {
   type QueuedAction, type QueueRow, type ResultRow,
 } from '@/db';
 import { isoNow, safeColor, brandOnDark, uid } from '@/theme';
+import { haptic } from '@/components/feedback';
 
 type Ctx = {
   ready: boolean;
@@ -197,8 +198,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await queueRemove(rows.map((r) => r.action_id));
       const sm = res.summary ?? {};
       setLastSyncMsg(
-        `Sync finished: ${sm.applied ?? 0} applied, ${sm.rejected ?? 0} rejected, ${sm.duplicate ?? 0} already done.`,
+        `Sync finished: ${sm.applied ?? 0} applied, ${sm.rejected ?? 0} rejected, ${sm.duplicate ?? 0} already recorded.`,
       );
+      haptic((sm.rejected ?? 0) > 0 ? 'warning' : 'success');
     } catch (e) {
       if (e instanceof ApiError && !e.network) setLastSyncMsg('The server could not process the sync. Your actions are still saved and will be retried.');
       else setLastSyncMsg('Could not reach the server. Your actions are saved and will sync when you are back online.');

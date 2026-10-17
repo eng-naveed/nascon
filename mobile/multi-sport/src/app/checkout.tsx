@@ -48,7 +48,9 @@ export default function Checkout() {
         payload: { order_id: r.order_id, customer_id: session?.user.id ?? '', items: r.items, subtotal_minor: r.subtotal_minor, discount_minor: r.discount_minor, total_minor: r.total_minor, currency: r.currency, paid_at: '' },
         signature: '',
       };
-      setReceipt(receipt);
+      const item_names: Record<string, string> = {};
+      cart.forEach((c) => { item_names[c.variant_id] = `${c.product_name} (${c.label})`; });
+      setReceipt({ ...receipt, item_names });
       clearCart();
       orderId.current = uid('ord-');
       router.replace('/receipt');

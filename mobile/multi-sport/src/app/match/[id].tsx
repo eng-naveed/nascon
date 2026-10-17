@@ -15,6 +15,7 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TeamMark } from '@/components/TeamMark';
+import { ScorePop } from '@/components/feedback';
 import { C, F, money } from '@/theme';
 
 export default function MatchDetail() {
@@ -42,7 +43,7 @@ export default function MatchDetail() {
                   <TeamMark id={m.home.team_id} name={names[m.home.team_id]} size={56} />
                   <Text style={s.team} numberOfLines={2}>{names[m.home.team_id]}</Text>
                 </View>
-                <Text style={s.score} testID="match-score" accessibilityLabel={`Score ${m.home.score} to ${m.away.score}`}>{m.home.score} - {m.away.score}</Text>
+                <ScorePop style={s.score} testID="match-score" accessibilityLabel={`Score ${m.home.score} to ${m.away.score}`} value={`${m.home.score} - ${m.away.score}`} />
                 <View style={s.side}>
                   <TeamMark id={m.away.team_id} name={names[m.away.team_id]} size={56} />
                   <Text style={s.team} numberOfLines={2}>{names[m.away.team_id]}</Text>

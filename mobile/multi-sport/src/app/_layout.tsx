@@ -42,6 +42,7 @@ function Inner() {
             <Stack.Protected guard={!!session}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="match/[id]" options={{ title: 'Match' }} />
+              <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
               <Stack.Screen name="club/[id]" options={{ title: 'Club profile' }} />
               <Stack.Screen name="scoring/[id]" options={{ title: 'Scoring entry' }} />
               <Stack.Screen name="checkout" options={{ title: 'Cart & checkout' }} />

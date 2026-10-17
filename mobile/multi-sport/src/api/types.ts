@@ -103,6 +103,8 @@ export type Receipt = {
   };
   signature: string;
   pdf_base64?: string;
+  /** Client-side only: variant_id -> "Product name (Size)" captured from the cart at checkout. */
+  item_names?: Record<string, string>;
 };
 export type CartItem = {
   variant_id: string;

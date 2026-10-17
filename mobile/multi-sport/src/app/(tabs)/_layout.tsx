@@ -26,7 +26,8 @@ function TenantTitle() {
 }
 
 export default function TabsLayout() {
-  const { session, primary } = useApp();
+  const { session, primary, cart } = useApp();
+  const cartCount = cart.reduce((a, c) => a + c.quantity, 0);
   const role = session?.user.role;
   const canManage = role === 'club_manager' || role === 'league_organizer' || role === 'super_admin';
   const icon = (n: React.ComponentProps<typeof Ionicons>['name']) => ({ color, size }: { color: any; size: number }) => <Ionicons name={n} size={size} color={color} />;
@@ -57,7 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Fixtures', tabBarIcon: icon('calendar'), tabBarButtonTestID: 'tab-fixtures', tabBarAccessibilityLabel: 'Fixtures' }} />
       <Tabs.Screen name="standings" options={{ title: 'Standings', tabBarIcon: icon('trophy'), tabBarButtonTestID: 'tab-standings', tabBarAccessibilityLabel: 'Standings' }} />
       <Tabs.Screen name="club" options={{ title: 'Club', tabBarIcon: icon('shield'), tabBarButtonTestID: 'tab-club', tabBarAccessibilityLabel: 'Club profile' }} />
-      <Tabs.Screen name="store" options={{ title: 'Store', tabBarIcon: icon('cart'), tabBarButtonTestID: 'tab-store', tabBarAccessibilityLabel: 'Store' }} />
+      <Tabs.Screen name="store" options={{ title: 'Store', tabBarIcon: icon('cart'), tabBarButtonTestID: 'tab-store', tabBarAccessibilityLabel: 'Store', tabBarBadge: cartCount > 0 ? cartCount : undefined, tabBarBadgeStyle: { backgroundColor: C.accent, color: C.bg, fontWeight: '900', fontSize: 12 } }} />
       <Tabs.Screen
         name="manage"
         options={{
