@@ -8,7 +8,12 @@
     "scheme": "multisport",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "io.nascon.multisport"
+      "bundleIdentifier": "io.nascon.multisport",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {

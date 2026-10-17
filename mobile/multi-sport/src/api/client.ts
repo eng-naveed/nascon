@@ -1,7 +1,8 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { kvGet, kvSet } from '@/db';
 
-export const DEFAULT_URL = process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8080';
+export const DEFAULT_URL = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'ios' ? 'http://localhost:8080' : 'http://10.0.2.2:8080');
 
 let baseUrl = DEFAULT_URL;
 let token: string | null = null;
