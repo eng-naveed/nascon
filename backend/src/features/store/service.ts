@@ -90,13 +90,20 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
     order_id: body.order_id, customer_id: body.customer_id, items, subtotal_minor: subtotal, discount_minor: discount,
     total_minor: total, currency: 'PKR', paid_at: paidAt,
   };
+  const names = new Map<string, string>();
+  try {
+    const nr = await pool.query('SELECT v.variant_id, p.name, v.label FROM variants v JOIN products p ON p.product_id=v.product_id WHERE v.variant_id = ANY($1)', [items.map((i) => i.variant_id)]);
+    for (const row of nr.rows) names.set(row.variant_id, `${row.name} (${row.label})`);
+  } catch {
+    // names are cosmetic: the receipt falls back to variant ids
+  }
   const response = {
     order_id: body.order_id, status: 'paid', currency: 'PKR', items, subtotal_minor: subtotal, discount_minor: discount, total_minor: total,
     payment: { authorization_id: `auth_${body.order_id}`, capture_id: `cap_${body.order_id}`, state: 'captured' },
     receipt: {
       payload,
       signature: sign(config.salt, body.order_id, payload),
-      pdf_base64: receiptPdf({ order_id: body.order_id, customer_id: body.customer_id, total_minor: total, subtotal_minor: subtotal, discount_minor: discount, items, paid_at: paidAt }),
+      pdf_base64: receiptPdf({ order_id: body.order_id, customer_id: body.customer_id, total_minor: total, subtotal_minor: subtotal, discount_minor: discount, items: items.map((i) => ({ ...i, name: names.get(i.variant_id) })), paid_at: paidAt }),
     },
   };
   await tx(async (c) => {
