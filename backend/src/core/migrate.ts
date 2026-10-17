@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS variants (
   variant_id text PRIMARY KEY, product_id text NOT NULL, label text NOT NULL, price_minor integer NOT NULL, currency text NOT NULL DEFAULT 'PKR',
   stock integer NOT NULL CHECK (stock >= 0), reserved integer NOT NULL DEFAULT 0 CHECK (reserved >= 0));
 CREATE TABLE IF NOT EXISTS orders (order_id text PRIMARY KEY, body_hash text NOT NULL, status text NOT NULL, response jsonb, customer_id text, created_at timestamptz DEFAULT now());
+CREATE TABLE IF NOT EXISTS stripe_events (event_id text PRIMARY KEY, type text NOT NULL, received_at timestamptz DEFAULT now());
 CREATE TABLE IF NOT EXISTS queue_events (id bigserial PRIMARY KEY, topic text NOT NULL, payload jsonb NOT NULL, created_at timestamptz DEFAULT now());
 CREATE TABLE IF NOT EXISTS roster_leagues (
   league_id text PRIMARY KEY, tenant_id text NOT NULL, sport_id text, window_open text NOT NULL, window_close text NOT NULL,
