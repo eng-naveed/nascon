@@ -43,6 +43,10 @@ The seed also contains demo league `league-alpha-1` ("Alpha Premier League", 4 c
 * iOS: `cd mobile/multi-sport && npx expo run:ios --configuration Release` installs the app on the simulator / device.
 * Android: `cd mobile/multi-sport && npx expo prebuild -p android && cd android && ./gradlew assembleRelease`, then copy the APK to `mobile/release/app-release.apk`.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push: type-check, unit tests with coverage, then `docker compose up -d --build` on a clean `ubuntu-latest` (amd64) runner, waits for `/health`, and runs the end-to-end API smoke test. A green run proves the one-command start works from a fresh clone.
+
 ## Tests
 
 ```bash
