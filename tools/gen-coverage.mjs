@@ -1,6 +1,6 @@
-// Generates COVERAGE.json from the vitest v8 summary. Areas map to the pure domain-logic
-// modules that the unit tests exercise (route handlers / SQL services are covered by
-// backend/tests/integration/smoke.py against the running stack, not by line coverage).
+// Generates COVERAGE.json from the vitest v8 summary produced by ./run_tests.sh.
+// Every area is measured over ALL of its source files (domain logic AND the SQL service layers),
+// by unit tests plus the API integration tests (tests/api, real Postgres). Figures are rounded DOWN.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -8,11 +8,11 @@ const root = resolve(new URL('..', import.meta.url).pathname);
 const summary = JSON.parse(readFileSync(resolve(root, 'backend/coverage/coverage-summary.json'), 'utf8'));
 const areas = {
   fixtures: ['src/features/fixtures/'],
-  scoring: ['src/features/events/projection.ts', 'src/core/crypto.ts'],
-  standings: ['src/features/standings/compute.ts'],
-  store: ['src/features/store/pdf.ts'],
-  roster: ['src/features/roster/rules.ts'],
-  rbac: ['src/features/rbac/policy.ts'],
+  scoring: ['src/features/events/', 'src/features/sports/', 'src/core/crypto.ts'],
+  standings: ['src/features/standings/'],
+  store: ['src/features/store/'],
+  roster: ['src/features/roster/'],
+  rbac: ['src/features/rbac/'],
 };
 const out = {};
 for (const [area, prefixes] of Object.entries(areas)) {

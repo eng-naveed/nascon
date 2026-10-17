@@ -12,12 +12,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unit tests + coverage
+      - name: Type-check
         working-directory: backend
         run: |
           npm ci --legacy-peer-deps
           npx tsc --noEmit
-          npx vitest run --coverage
+
+      - name: Unit + API integration tests with coverage (starts a throwaway Postgres)
+        run: ./run_tests.sh
 
       - name: Start the stack exactly like the grader (docker compose up -d --build)
         env:
