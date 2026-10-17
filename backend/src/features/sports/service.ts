@@ -6,7 +6,7 @@ import type { SportConfig } from '../events/projection';
 
 const TOKENS = ['h2h_points', 'h2h_diff', 'overall_diff', 'scored', 'fair_play', 'draw_lots'];
 export const DEFAULT_TIE_BREAK = TOKENS;
-const key = z.string().regex(/^[a-z0-9_-]{1,40}$/);
+const key = z.string().regex(/^[a-z0-9_]{1,40}$/);
 const int = z.number().int();
 
 const common = {
@@ -58,6 +58,7 @@ export async function createSport(db: Db, body: unknown): Promise<SportConfig> {
   if (Object.keys(cfg.scoring_events).length < 1) throw validation(['scoring_events']);
   const dup = await db.query('SELECT 1 FROM sports WHERE sport_id=$1', [cfg.sport_id]);
   if (dup.rowCount) throw conflict('SPORT_EXISTS', `Sport ${cfg.sport_id} already exists.`, { sport_id: cfg.sport_id });
+  if (!cfg.tie_break_order) cfg.tie_break_order = [...DEFAULT_TIE_BREAK];
   await db.query('INSERT INTO sports(sport_id, config) VALUES ($1,$2)', [cfg.sport_id, cfg]);
   return cfg;
 }

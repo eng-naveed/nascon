@@ -14,7 +14,7 @@ const setupSchema = z.object({
     tenant_id: idSchema,
     sport_id: z.string().optional(),
     transfer_window: z.object({ open: date, close: date }),
-    max_squad_size: z.number().int().min(1).optional(),
+    max_squad_size: z.number().int().min(1).max(100000).optional(),
     required_positions: z.record(z.string(), z.number().int().min(0)).optional(),
   }),
   squads: z.array(z.object({ squad_id: idSchema, club_id: idSchema.optional(), tenant_id: idSchema, name: z.string().max(120).optional() })),
@@ -58,7 +58,8 @@ export async function setupRoster(c: PoolClient, body: unknown) {
   await c.query('DELETE FROM roster_players WHERE league_id=$1', [L.league_id]);
   await c.query('DELETE FROM roster_squads WHERE league_id=$1', [L.league_id]);
   await c.query('DELETE FROM roster_leagues WHERE league_id=$1', [L.league_id]);
-  await c.query('DELETE FROM roster_requests WHERE (response->>\'league_id\') IS NULL OR (response->\'registration\'->>\'league_id\')=$1 OR (response->\'audit_entry\'->>\'league_id\')=$1', [L.league_id]);
+  await c.query("DELETE FROM roster_requests WHERE (response->'audit_entry'->>'league_id')=$1", [L.league_id]);
+  for (const p of b.players) await c.query('DELETE FROM roster_audit WHERE player_id=$1', [p.player_id]);
   await c.query('INSERT INTO roster_leagues VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [
     L.league_id, L.tenant_id, L.sport_id ?? null, L.transfer_window.open, L.transfer_window.close, maxSquad, JSON.stringify(required), JSON.stringify(b.matches_in_progress ?? []),
   ]);
@@ -118,8 +119,11 @@ export async function transfer(c: PoolClient, rawBody: unknown): Promise<{ statu
   const player = pl.rows[0];
   const sq = async (id: string) => {
     const r = await c.query('SELECT * FROM roster_squads WHERE league_id=$1 AND squad_id=$2', [b.league_id, id]);
-    if (!r.rowCount) throw notFound('SQUAD_NOT_FOUND', `Squad ${id} not found.`, { squad_id: id });
-    return r.rows[0];
+    if (r.rowCount) return r.rows[0];
+    // A squad that exists only in another league: if it belongs to a different tenant this is a cross-tenant transfer.
+    const other = await c.query('SELECT * FROM roster_squads WHERE squad_id=$1 AND tenant_id<>$2 LIMIT 1', [id, league.tenant_id]);
+    if (other.rowCount) return other.rows[0];
+    throw notFound('SQUAD_NOT_FOUND', `Squad ${id} not found.`, { squad_id: id });
   };
   const from = await sq(b.from_squad_id);
   const to = b.type === 'release' ? null : await sq(b.to_squad_id!);
@@ -183,5 +187,5 @@ export async function history(c: PoolClient, playerId: string, asOfRaw: unknown)
   await materializeReturn(c, playerId, asOf);
   const reg = (await c.query('SELECT * FROM roster_regs WHERE player_id=$1', [playerId])).rows[0];
   const rows = (await c.query('SELECT * FROM roster_audit WHERE player_id=$1 ORDER BY seq', [playerId])).rows;
-  return { player_id: playerId, as_of: asOf, league_id: pl.rows[0].league_id, current_squad_id: reg?.squad_id ?? null, history: rows.map(auditView) };
+  return { player_id: playerId, as_of: asOf, league_id: pl.rows[0].league_id, current_squad_id: reg?.squad_id ?? null, parent_squad_id: reg?.parent_squad_id ?? null, history: rows.map(auditView) };
 }

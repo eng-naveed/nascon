@@ -31,6 +31,11 @@ describe('jwt', () => {
     expect(verifyJwt(signJwt(claims, 's', -10), 's')).toBeNull();
     expect(verifyJwt('abc', 's')).toBeNull();
     expect(verifyJwt('a.b.c', 's')).toBeNull();
+    // non-canonical base64url tail (only the padding bits differ) must be rejected
+    const last = s[s.length - 1];
+    const alt = last === 'A' ? 'B' : 'A';
+    expect(verifyJwt(`${h}.${p}.${s.slice(0, -1)}${alt}`, 's')).toBeNull();
+    expect(verifyJwt(`${h}.${p}.${s}=`, 's')).toBeNull();
   });
 });
 

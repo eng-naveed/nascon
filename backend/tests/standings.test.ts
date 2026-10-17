@@ -72,4 +72,10 @@ describe('standings', () => {
     const empty = computeStandings({ league_id: 'lg', sport: cr, teams: ['a', 'b'], points: P, tieBreakOrder: ORDER, spots: 1, lotsSeed: 42, fixtures: [] });
     expect(empty.table[0].diff).toBe(0);
   });
+  it('applies draw_lots last even when it is listed first', () => {
+    // a and b level on points and overall_diff, but a scored more: 'scored' must run before draw_lots
+    const r = run(['a', 'b', 'c', 'd'], [rec('a', 'c', 3, 3), rec('b', 'd', 1, 1)], [], { tieBreakOrder: ['draw_lots', 'scored'] });
+    expect(r.table.slice(0, 2).map((t) => t.team_id).sort()).toEqual(['a', 'c']);
+    expect(r.table[1].resolved_by).toBe('scored');
+  });
 });

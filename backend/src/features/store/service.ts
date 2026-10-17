@@ -8,9 +8,9 @@ import { receiptPdf } from './pdf';
 
 const checkoutSchema = z.object({
   order_id: idSchema,
-  customer_id: z.string().min(1).max(200),
+  customer_id: z.string().min(1).max(200).refine((v) => !v.includes('\u0000'), 'bad char'),
   items: z.array(z.object({ variant_id: idSchema, quantity: z.number().int().min(1).max(10) })).min(1).max(10),
-  discount_code: z.string().max(64).nullable().optional(),
+  discount_code: z.string().nullable().optional(),
   payment: z.object({ token: z.string().min(1).max(100) }),
 });
 
@@ -23,6 +23,7 @@ function gateway(token: string) {
 
 export async function checkout(rawBody: unknown, actor?: { sub: string }) {
   const body = parse(checkoutSchema, rawBody);
+  body.items.sort((a, b) => (a.variant_id < b.variant_id ? -1 : a.variant_id > b.variant_id ? 1 : 0));
   const ids = body.items.map((i) => i.variant_id);
   if (new Set(ids).size !== ids.length) throw validation(['items']);
   const hash = bodyHash({ ...body, discount_code: body.discount_code ?? null });
@@ -36,14 +37,14 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
       const row = ex.rows[0];
       if (row.body_hash !== hash) throw conflict('DUPLICATE_ORDER_ID', `Order id ${body.order_id} was already used with different content.`, { order_id: body.order_id });
       if (row.status === 'paid') return { replay: row.response };
-      throw conflict('DUPLICATE_ORDER_ID', 'This order is already being processed.', { order_id: body.order_id });
+      return { inflight: true as const };
     }
     const vs = await c.query('SELECT variant_id, price_minor, currency FROM variants WHERE variant_id = ANY($1)', [ids]);
     const prices = new Map(vs.rows.map((r) => [r.variant_id, r.price_minor as number]));
     for (const id of ids) if (!prices.has(id)) throw notFound('VARIANT_NOT_FOUND', `Variant ${id} not found.`, { variant_id: id });
     const code = body.discount_code ?? null;
     if (code !== null && code !== 'WELCOME10') throw new AppError(400, 'INVALID_DISCOUNT_CODE', 'That discount code is not valid.', { discount_code: code });
-    for (const it of [...body.items].sort((a, b) => (a.variant_id < b.variant_id ? -1 : 1))) {
+    for (const it of body.items) {
       const r = await c.query('UPDATE variants SET stock = stock - $2, reserved = reserved + $2 WHERE variant_id=$1 AND stock >= $2', [it.variant_id, it.quantity]);
       if (!r.rowCount) throw conflict('OUT_OF_STOCK', `Variant ${it.variant_id} has no stock left.`, { variant_id: it.variant_id });
     }
@@ -53,6 +54,16 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
     const discount = code === 'WELCOME10' ? Math.floor((subtotal * 10) / 100) : 0;
     return { items, subtotal, discount };
   });
+  if ('inflight' in reserved) {
+    // identical request while the first is still being processed: wait for its stored result
+    for (let i = 0; i < 80; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      const row = (await pool.query('SELECT status, response FROM orders WHERE order_id=$1', [body.order_id])).rows[0];
+      if (row?.status === 'paid') return { status: 200, body: row.response };
+      if (!row) break;
+    }
+    throw conflict('DUPLICATE_ORDER_ID', 'This order is already being processed.', { order_id: body.order_id });
+  }
   if ('replay' in reserved) return { status: 200, body: reserved.replay };
 
   const { items, subtotal, discount } = reserved;
@@ -62,6 +73,7 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
       if (restock) await c.query('DELETE FROM orders WHERE order_id=$1', [body.order_id]);
     });
 
+  try {
   const gw = gateway(body.payment.token);
   if (!gw.authorize) {
     await release(true);
@@ -93,6 +105,10 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
     await c.query('INSERT INTO queue_events(topic, payload) VALUES ($1,$2)', ['order.status_changed', JSON.stringify({ order_id: body.order_id, from: 'Pending', to: 'Paid' })]);
   });
   return { status: 201, body: response };
+  } catch (e) {
+    if (!(e instanceof AppError)) await release(true).catch(() => undefined);
+    throw e;
+  }
 }
 
 export async function inventory(variantId: string) {
