@@ -103,7 +103,8 @@ export function computeStandings(inp: StandingsInput) {
     });
   }
 
-  const order = inp.tieBreakOrder.includes('draw_lots') ? inp.tieBreakOrder : [...inp.tieBreakOrder, 'draw_lots'];
+  // draw_lots is ALWAYS applied last, wherever (or whether) it appears in the configured order
+  const order = [...inp.tieBreakOrder.filter((c) => c !== 'draw_lots'), 'draw_lots'];
 
   // returns ordered teams and the criterion separating each adjacent pair
   const resolve = (group: string[]): { order: string[]; sep: (string | null)[] } => {

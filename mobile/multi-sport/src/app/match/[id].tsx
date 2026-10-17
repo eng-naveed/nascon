@@ -53,7 +53,7 @@ export default function MatchDetail() {
                   {m.outcome === 'draw' ? 'Result: draw' : m.winner_team_id ? `Winner: ${names[m.winner_team_id] ?? m.winner_team_id}` : 'Result: undecided'}
                 </Text>
               ) : null}
-              <Text style={T.sub}>{q.fromCache ? 'Saved score' : 'Live: refreshes every 3 seconds'}</Text>
+              {q.fromCache ? <Text style={T.sub}>Saved score</Text> : m.status === 'in_progress' ? <Text style={T.sub}>Live: refreshes every 3 seconds</Text> : null}
             </View>
           </Card>
           {m.showcase ? (

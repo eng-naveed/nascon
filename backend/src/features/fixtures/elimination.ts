@@ -68,14 +68,27 @@ function blank(match_id: string, bracket: BMatch['bracket'], round: number, inde
 
 class Bracket {
   map = new Map<string, BMatch>();
+  seedOf = new Map<string, number>();
+  dead = new Set<string>(); // "matchId|slot": no team can ever arrive here
+  deadMatch = new Set<string>();
+  after: (() => void) | null = null;
+  guard: ((m: BMatch) => void) | null = null;
   add(m: BMatch) {
     this.map.set(m.match_id, m);
     return m;
   }
   put(t: Target | null, team: string | null) {
-    if (!t || !team) return;
+    if (!t) return;
+    if (!team) {
+      this.dead.add(`${t.match_id}|${t.slot}`);
+      return;
+    }
     const m = this.map.get(t.match_id);
-    if (m) m[t.slot] = team;
+    if (!m) return;
+    m[t.slot] = team;
+    const seed = this.seedOf.get(team) ?? null;
+    if (t.slot === 'home') m.home_seed = m.home_seed ?? seed;
+    else m.away_seed = m.away_seed ?? seed;
   }
   decide(m: BMatch, winner: string) {
     m.winner = winner;
@@ -83,20 +96,41 @@ class Bracket {
     this.put(m.winner_to, m.winner);
     this.put(m.loser_to, m.loser);
   }
+  /** Propagates "dead" slots (fed by a bye's missing loser) so the bracket can never stall. */
+  settle() {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const m of this.map.values()) {
+        if (m.winner !== null || this.deadMatch.has(m.match_id)) continue;
+        const hd = !m.home && this.dead.has(`${m.match_id}|home`);
+        const ad = !m.away && this.dead.has(`${m.match_id}|away`);
+        if (hd && ad) {
+          this.deadMatch.add(m.match_id);
+          this.put(m.winner_to, null);
+          this.put(m.loser_to, null);
+          changed = true;
+        } else if ((m.home && ad) || (m.away && hd)) {
+          m.bye = true;
+          this.decide(m, (m.home ?? m.away)!);
+          m.loser = null;
+          changed = true;
+        }
+      }
+    }
+  }
   applyResults(results: { match_id: string; winner: string }[]) {
-    const roundOf = (id: string) => {
-      const m = this.map.get(id);
-      return m ? (m.bracket === 'losers' ? m.round + 0.5 : m.bracket === 'grand_final' ? 1000 + m.round : m.round) : -1;
-    };
-    // dependency-friendly order: winners rounds first interleaved with losers rounds
     const order = [...results].sort((a, b) => weight(this.map.get(a.match_id)) - weight(this.map.get(b.match_id)));
-    void roundOf;
     for (const r of order) {
       const m = this.map.get(r.match_id);
-      if (!m) throw validation(['params.results']);
-      if (!m.home || !m.away || (m.winner !== null && m.winner !== r.winner)) throw validation(['params.results']);
-      if (r.winner !== m.home && r.winner !== m.away) throw validation(['params.results']);
+      if (!m) throw validation(['params.results', 'results']);
+      if (m.winner !== null && m.winner === r.winner) continue; // already decided (e.g. a bye): no-op
+      if (!m.home || !m.away || m.winner !== null) throw validation(['params.results', 'results']);
+      if (r.winner !== m.home && r.winner !== m.away) throw validation(['params.results', 'results']);
+      this.guard?.(m);
       this.decide(m, r.winner);
+      this.settle();
+      this.after?.();
     }
   }
 }
@@ -145,6 +179,7 @@ export function generateSingleElim(teams: string[], params: ElimParams = {}) {
   const B = bracketSize(n);
   const k = Math.log2(B);
   const br = new Bracket();
+  teams.forEach((t, i) => br.seedOf.set(t, i + 1));
   seedRound1(br, teams, 'R', 'main', B);
   for (let r = 2; r <= k; r++) for (let i = 1; i <= B / 2 ** r; i++) br.add(blank(`R${r}M${i}`, 'main', r, i));
   for (const m of [...br.map.values()]) {
@@ -161,6 +196,7 @@ export function generateSingleElim(teams: string[], params: ElimParams = {}) {
       m.loser = null;
     }
   }
+  br.settle();
   br.applyResults(params.results ?? []);
   const mainMatches = [...br.map.values()].filter((m) => m.bracket === 'main');
   const rounds = group(mainMatches);
@@ -174,6 +210,7 @@ export function generateDoubleElim(teams: string[], params: ElimParams = {}) {
   const k = Math.log2(B);
   const reset = params.bracket_reset === true;
   const br = new Bracket();
+  teams.forEach((t, i) => br.seedOf.set(t, i + 1));
   seedRound1(br, teams, 'WR', 'winners', B);
   for (let r = 2; r <= k; r++) for (let i = 1; i <= B / 2 ** r; i++) br.add(blank(`WR${r}M${i}`, 'winners', r, i));
   for (let j = 1; j <= k - 1; j++)
@@ -206,15 +243,25 @@ export function generateDoubleElim(teams: string[], params: ElimParams = {}) {
       m.loser = null;
     }
   }
-  br.applyResults(params.results ?? []);
-
-  if (gf2) {
+  gf1.conditional = false;
+  gf1.required = true;
+  const syncGF = () => {
+    if (!gf2) return;
     if (gf1.home && gf1.away) {
       gf2.home = gf1.home;
       gf2.away = gf1.away;
+      gf2.home_seed = gf1.home_seed;
+      gf2.away_seed = gf1.away_seed;
     }
     gf2.required = gf1.winner ? gf1.winner === gf1.away : null;
-  }
+  };
+  br.guard = (m) => {
+    if (m.match_id === 'GF2' && gf2 && gf2.required !== true) throw validation(['params.results', 'results']);
+  };
+  br.after = syncGF;
+  br.settle();
+  syncGF();
+  br.applyResults(params.results ?? []);
   const all = [...br.map.values()];
   return {
     format: 'double_elim',

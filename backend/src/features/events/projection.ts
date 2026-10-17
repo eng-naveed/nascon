@@ -57,7 +57,7 @@ export function project(sport: SportConfig, meta: MatchMeta, events: StoredEvent
     if (comp.has(e.event_id) || e.type === 'compensation') continue;
     const t = teams[e.payload?.team_id];
     if (e.type === 'score' && t) {
-      const def = sport.scoring_events[e.payload.event_type];
+      const def = Object.hasOwn(sport.scoring_events, e.payload.event_type) ? sport.scoring_events[e.payload.event_type] : undefined;
       if (!def) continue;
       if (sport.scoring_model === 'event') t.score += def.points;
       else if (sport.scoring_model === 'innings') {

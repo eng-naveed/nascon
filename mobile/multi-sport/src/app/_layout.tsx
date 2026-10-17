@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '@/state/app';
-import { SyncBar } from '@/components/SyncBar';
+import { SyncBanner, SyncPill } from '@/components/SyncBar';
 import { useFonts, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
 import { C, F } from '@/theme';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
@@ -30,6 +30,9 @@ function Inner() {
               headerTintColor: C.text,
               headerTitleStyle: { fontFamily: F.displayHeavy, fontSize: 24 },
               headerShadowVisible: false,
+              headerBackButtonDisplayMode: 'minimal',
+              headerBackTitle: 'Back',
+              headerRight: () => <SyncPill />,
               contentStyle: { backgroundColor: C.bg },
             }}
           >
@@ -49,8 +52,8 @@ function Inner() {
           </Stack>
         </View>
       </SafeAreaInsetsContext.Provider>
-      <View style={{ paddingBottom: insets.bottom, backgroundColor: C.card }}>
-        <SyncBar />
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: C.bg }}>
+        <SyncBanner />
       </View>
     </View>
   );

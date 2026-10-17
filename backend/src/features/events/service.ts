@@ -15,7 +15,7 @@ const envelope = z.object({
 });
 const team = idSchema;
 const payloads: Record<string, z.ZodTypeAny> = {
-  match_init: z.object({ sport_id: z.string().min(1).max(64), home_team_id: team, away_team_id: team, league_id: idSchema.optional() }),
+  match_init: z.object({ sport_id: z.string().min(1).max(64), home_team_id: team, away_team_id: team, league_id: idSchema.optional() }).refine((v) => v.home_team_id !== v.away_team_id, { path: ['away_team_id'], message: 'must differ from home_team_id' }),
   match_start: z.object({}),
   score: z.object({ team_id: team, event_type: z.string().min(1).max(64) }),
   discipline: z.object({ team_id: team, points: z.number().int() }),
@@ -57,9 +57,9 @@ export async function appendEvent(c: PoolClient, rawBody: unknown): Promise<{ st
   let seq = 1;
 
   if (body.type === 'match_init') {
-    const sport = await getSport(c, pl.sport_id);
     const exists = await c.query('SELECT 1 FROM matches WHERE match_id=$1', [body.match_id]);
     if (exists.rowCount) throw conflict('MATCH_EXISTS', `Match ${body.match_id} already exists.`, { match_id: body.match_id });
+    const sport = await getSport(c, pl.sport_id);
     await c.query('INSERT INTO matches(match_id, sport_id, league_id, home_team_id, away_team_id) VALUES ($1,$2,$3,$4,$5)', [
       body.match_id, sport.sport_id, pl.league_id ?? null, pl.home_team_id, pl.away_team_id,
     ]);
@@ -80,7 +80,7 @@ export async function appendEvent(c: PoolClient, rawBody: unknown): Promise<{ st
     } else if (body.type === 'score') {
       inProgress();
       checkTeam();
-      const def = sport.scoring_events[pl.event_type];
+      const def = Object.hasOwn(sport.scoring_events, pl.event_type) ? sport.scoring_events[pl.event_type] : undefined;
       if (!def) throw new AppError(400, 'UNKNOWN_EVENT_TYPE', `Unknown event type ${pl.event_type} for ${sport.sport_id}.`, { event_type: pl.event_type });
       if (sport.scoring_model === 'innings') {
         const t = pl.team_id === meta.home_team_id ? view.home : view.away;

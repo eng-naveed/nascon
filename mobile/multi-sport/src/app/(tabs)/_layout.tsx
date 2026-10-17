@@ -3,13 +3,14 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/state/app';
+import { SyncPill } from '@/components/SyncBar';
 import { C, F, onColor } from '@/theme';
 
 function TenantTitle() {
   const { session, primary } = useApp();
   const t = session?.tenant;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }} testID="tenant-header" accessible accessibilityLabel={`Organisation ${t?.name ?? ''}`}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 190 }} testID="tenant-header" accessible accessibilityLabel={`Organisation ${t?.name ?? ''}`}>
       {t?.logo_url ? (
         <Image source={{ uri: t.logo_url }} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: C.card2 }} accessibilityLabel="Organisation logo" />
       ) : (
@@ -34,13 +35,17 @@ export default function TabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: C.bg },
         headerShadowVisible: false,
+        headerTitleAlign: 'left',
         headerTintColor: C.text,
         sceneStyle: { backgroundColor: C.bg },
         headerTitle: () => <TenantTitle />,
         headerRight: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 }}>
+          <SyncPill />
           <Pressable testID="open-settings" accessibilityLabel="Settings and account" accessibilityRole="button" onPress={() => router.push('/settings')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="settings-outline" size={24} color={C.text} />
           </Pressable>
+          </View>
         ),
         tabBarActiveTintColor: primary,
         tabBarInactiveTintColor: '#8A99BC',
