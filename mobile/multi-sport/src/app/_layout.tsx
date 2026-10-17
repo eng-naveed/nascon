@@ -6,6 +6,7 @@ import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'reac
 import { AppProvider, useApp } from '@/state/app';
 import { SyncBar } from '@/components/SyncBar';
 import { onColor } from '@/theme';
+import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 
 function Inner() {
   const { ready, session, primary } = useApp();
@@ -53,6 +54,7 @@ function Inner() {
 }
 
 export default function Root() {
+  useAutoUpdate();
   return (
     <SafeAreaProvider>
       <AppProvider>
