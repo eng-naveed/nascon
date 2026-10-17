@@ -14,7 +14,7 @@ import { Button } from '@/components/Button';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { StatusBadge } from '@/components/StatusBadge';
-import { uid } from '@/theme';
+import { uid, C } from '@/theme';
 
 export default function Scoring() {
   const { id, home, away } = useLocalSearchParams<{ id: string; home?: string; away?: string }>();
@@ -80,7 +80,7 @@ export default function Scoring() {
         <>
           <Card testID="scoring-summary">
             <StatusBadge status={m.status} />
-            <Text style={{ fontSize: 18, fontWeight: '800' }}>{names[m.home.team_id]} {m.home.score} - {m.away.score} {names[m.away.team_id]}</Text>
+            <Text style={{ color: C.text, fontSize: 18, fontWeight: '800' }}>{names[m.home.team_id]} {m.home.score} - {m.away.score} {names[m.away.team_id]}</Text>
             <Text style={T.sub}>Sport: {m.sport_id} · version {m.version}</Text>
           </Card>
           {msg ? <ErrorBanner kind={msg.k} message={msg.t} /> : null}

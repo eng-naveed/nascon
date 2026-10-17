@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "multisport",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "io.nascon.multisport",
       "infoPlist": {
@@ -68,7 +68,8 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/36b54684-eb1b-488c-9ba2-271ad88994d7"
+      "url": "https://u.expo.dev/36b54684-eb1b-488c-9ba2-271ad88994d7",
+      "enabled": false
     }
   }
 }

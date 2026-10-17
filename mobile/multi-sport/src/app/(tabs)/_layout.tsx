@@ -47,7 +47,8 @@ export default function TabsLayout() {
           </Pressable>
           </View>
         ),
-        tabBarActiveTintColor: primary,
+        tabBarActiveTintColor: C.text,
+        tabBarActiveBackgroundColor: primary + '55',
         tabBarInactiveTintColor: '#8A99BC',
         tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
         tabBarStyle: { minHeight: 60, backgroundColor: C.card, borderTopColor: C.border, borderTopWidth: 1 },

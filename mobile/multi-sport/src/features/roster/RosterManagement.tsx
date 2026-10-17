@@ -13,7 +13,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
-import { isoNow, uid } from '@/theme';
+import { isoNow, uid, C } from '@/theme';
 
 type Kind = 'transfer' | 'loan' | 'release' | 'add';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -111,6 +111,12 @@ export function RosterManagement({ clubId }: { clubId: string }) {
       )}
       {kind === 'transfer' || kind === 'loan' ? (
         <>
+          {(r?.other_squads?.length ?? 0) > 0 ? (
+            <>
+              <H>Destination squad</H>
+              <Chips testIDPrefix="roster-to" value={toSquad || null} onChange={setToSquad} options={(r?.other_squads ?? []).map((x) => ({ value: x.squad_id, label: x.name || x.squad_id }))} />
+            </>
+          ) : null}
           <Field label="Destination squad ID" testID="roster-to-squad" value={toSquad} onChangeText={setToSquad} />
           {squads.length > 0 ? <Text style={T.sub}>Your squads: {squads.map((s) => `${s.name} (${s.squad_id})`).join(', ')}</Text> : null}
         </>
@@ -123,7 +129,7 @@ export function RosterManagement({ clubId }: { clubId: string }) {
       <H>Current squads</H>
       {squads.map((s) => (
         <Card key={s.squad_id} testID={`squad-${s.squad_id}`}>
-          <Text style={{ fontSize: 17, fontWeight: '800' }}>{s.name}</Text>
+          <Text style={{ color: C.text, fontSize: 17, fontWeight: '800' }}>{s.name}</Text>
           {s.players.length === 0 ? <Text style={T.sub}>No players</Text> : s.players.map((p) => <Text key={p.player_id} style={T.body}>{p.name} · {p.position} · {p.role.replace('_', ' ')}</Text>)}
         </Card>
       ))}
