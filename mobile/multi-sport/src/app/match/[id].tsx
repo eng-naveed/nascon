@@ -14,7 +14,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { StatusBadge } from '@/components/StatusBadge';
-import { C, money } from '@/theme';
+import { TeamMark } from '@/components/TeamMark';
+import { C, F, money } from '@/theme';
 
 export default function MatchDetail() {
   const { id, home, away } = useLocalSearchParams<{ id: string; home?: string; away?: string }>();
@@ -37,9 +38,15 @@ export default function MatchDetail() {
             <View style={{ alignItems: 'center', gap: 8 }}>
               <StatusBadge status={m.status} />
               <View style={s.row}>
-                <Text style={s.team} numberOfLines={2}>{names[m.home.team_id]}</Text>
+                <View style={s.side}>
+                  <TeamMark id={m.home.team_id} name={names[m.home.team_id]} size={56} />
+                  <Text style={s.team} numberOfLines={2}>{names[m.home.team_id]}</Text>
+                </View>
                 <Text style={s.score} testID="match-score" accessibilityLabel={`Score ${m.home.score} to ${m.away.score}`}>{m.home.score} - {m.away.score}</Text>
-                <Text style={[s.team, { textAlign: 'right' }]} numberOfLines={2}>{names[m.away.team_id]}</Text>
+                <View style={s.side}>
+                  <TeamMark id={m.away.team_id} name={names[m.away.team_id]} size={56} />
+                  <Text style={s.team} numberOfLines={2}>{names[m.away.team_id]}</Text>
+                </View>
               </View>
               {m.status === 'completed' ? (
                 <Text style={T.body} testID="match-outcome">
@@ -84,8 +91,9 @@ export default function MatchDetail() {
   );
 }
 const s = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' },
-  team: { flex: 1, fontSize: 17, fontWeight: '700', color: C.text },
-  score: { fontSize: 40, fontWeight: '900', color: C.text, minWidth: 110, textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4, width: '100%', paddingVertical: 8 },
+  side: { flex: 1, alignItems: 'center', gap: 8 },
+  team: { fontSize: 15, fontWeight: '800', color: C.text, textAlign: 'center' },
+  score: { fontSize: 64, fontFamily: F.displayHeavy, color: C.accent, minWidth: 120, textAlign: 'center', letterSpacing: 2 },
   seq: { fontSize: 14, fontWeight: '800', color: C.sub, minWidth: 32 },
 });

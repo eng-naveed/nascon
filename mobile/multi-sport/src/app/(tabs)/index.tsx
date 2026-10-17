@@ -12,7 +12,8 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { StatusBadge } from '@/components/StatusBadge';
 import { LeaguePicker, useLeagues } from '@/components/LeaguePicker';
-import { C, fmtTime } from '@/theme';
+import { TeamMark } from '@/components/TeamMark';
+import { C, F, fmtTime } from '@/theme';
 
 export default function Fixtures() {
   const { leagueId } = useApp();
@@ -37,9 +38,17 @@ export default function Fixtures() {
             <Text style={s.time}>{fmtTime(f.scheduled_at)}</Text>
           </View>
           <View style={s.row}>
-            <Text style={s.team} numberOfLines={2}>{f.home_name}</Text>
-            <Text style={s.score}>{f.status === 'upcoming' ? 'vs' : `${f.home_score ?? 0} - ${f.away_score ?? 0}`}</Text>
-            <Text style={[s.team, { textAlign: 'right' }]} numberOfLines={2}>{f.away_name}</Text>
+            <View style={s.side}>
+              <TeamMark id={f.home_team_id} name={f.home_name} />
+              <Text style={s.team} numberOfLines={2}>{f.home_name}</Text>
+            </View>
+            <View style={s.mid}>
+              <Text style={[s.score, f.status === 'upcoming' && { fontSize: 24, color: C.sub }]}>{f.status === 'upcoming' ? 'VS' : `${f.home_score ?? 0} - ${f.away_score ?? 0}`}</Text>
+            </View>
+            <View style={s.side}>
+              <TeamMark id={f.away_team_id} name={f.away_name} />
+              <Text style={s.team} numberOfLines={2}>{f.away_name}</Text>
+            </View>
           </View>
         </Card>
       ))}
@@ -47,9 +56,11 @@ export default function Fixtures() {
   );
 }
 const s = StyleSheet.create({
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8, flexWrap: 'wrap' },
-  time: { fontSize: 14, color: C.sub },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  team: { flex: 1, fontSize: 16, fontWeight: '700', color: C.text },
-  score: { fontSize: 22, fontWeight: '800', color: C.text, minWidth: 60, textAlign: 'center' },
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' },
+  time: { fontSize: 13, color: C.sub, fontWeight: '600' },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  side: { flex: 1, alignItems: 'center', gap: 8 },
+  mid: { minWidth: 92, alignItems: 'center' },
+  team: { fontSize: 15, fontWeight: '800', color: C.text, textAlign: 'center' },
+  score: { fontSize: 40, fontFamily: F.displayHeavy, color: C.text, textAlign: 'center', letterSpacing: 1 },
 });

@@ -5,29 +5,32 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '@/state/app';
 import { SyncBar } from '@/components/SyncBar';
-import { onColor } from '@/theme';
+import { useFonts, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
+import { C, F } from '@/theme';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 
 function Inner() {
-  const { ready, session, primary } = useApp();
+  const { ready, session } = useApp();
   const insets = useSafeAreaInsets();
-  if (!ready)
+  const [fontsLoaded, fontError] = useFonts({ BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold });
+  if (!ready || (!fontsLoaded && !fontError))
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}>
+        <ActivityIndicator size="large" color={C.accent} />
       </View>
     );
-  const fg = onColor(primary);
   return (
-    <View style={{ flex: 1 }}>
-      <StatusBar style={fg === '#FFFFFF' ? 'light' : 'dark'} />
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <StatusBar style="light" />
       <SafeAreaInsetsContext.Provider value={{ ...insets, bottom: 0 }}>
         <View style={{ flex: 1 }}>
           <Stack
             screenOptions={{
-              headerStyle: { backgroundColor: primary },
-              headerTintColor: fg,
-              headerTitleStyle: { fontWeight: '800' },
+              headerStyle: { backgroundColor: C.bg },
+              headerTintColor: C.text,
+              headerTitleStyle: { fontFamily: F.displayHeavy, fontSize: 24 },
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: C.bg },
             }}
           >
             <Stack.Protected guard={!session}>
@@ -46,7 +49,7 @@ function Inner() {
           </Stack>
         </View>
       </SafeAreaInsetsContext.Provider>
-      <View style={{ paddingBottom: insets.bottom, backgroundColor: '#fff' }}>
+      <View style={{ paddingBottom: insets.bottom, backgroundColor: C.card }}>
         <SyncBar />
       </View>
     </View>
