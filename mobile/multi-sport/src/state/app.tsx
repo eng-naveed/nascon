@@ -6,7 +6,7 @@ import {
   cacheClear, kvDel, kvGet, kvSet, queueAdd, queueList, queueRemove, resultsClear, resultsList, resultsSave,
   type QueuedAction, type QueueRow, type ResultRow,
 } from '@/db';
-import { isoNow, safeColor, uid } from '@/theme';
+import { isoNow, safeColor, brandOnDark, uid } from '@/theme';
 
 type Ctx = {
   ready: boolean;
@@ -259,7 +259,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await refreshQueue();
   }, [refreshQueue]);
 
-  const primary = safeColor(session?.tenant?.primary_color);
+  const primary = brandOnDark(safeColor(session?.tenant?.primary_color));
 
   const value = useMemo<Ctx>(
     () => ({

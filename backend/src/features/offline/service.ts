@@ -35,7 +35,7 @@ interface Result {
 async function currentVersion(type: string, payload: any): Promise<number | null> {
   if (type === 'score_event') {
     const m = await pool.query('SELECT 1 FROM matches WHERE match_id=$1', [String(payload.match_id)]);
-    if (!m.rowCount) return null;
+    if (!m.rowCount) return payload.type === 'match_init' ? 0 : null; // a match_init creates the stream
     return (await loadEvents(pool, String(payload.match_id))).length;
   }
   const p = await pool.query('SELECT 1 FROM roster_players WHERE player_id=$1', [String(payload.player_id)]);
@@ -67,6 +67,23 @@ export async function offlineSync(rawBody: unknown) {
           await pool.query('INSERT INTO sync_actions VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [body.device_id, a.action_id, JSON.stringify({ duplicate: true })]);
           continue;
         }
+      }
+      // Validate the payload shape first (400 before 404 before 409), then ids, then base_version.
+      const pl = a.payload as any;
+      const isStr = (v: unknown) => typeof v === 'string' && v.length > 0;
+      if (a.type === 'score_event') {
+        if (!isStr(pl.event_id) || !isStr(pl.match_id) || !isStr(pl.type)) throw new AppError(400, 'VALIDATION_ERROR', 'Invalid action payload.', { fields: ['payload'] });
+      } else {
+        if (!isStr(pl.request_id) || !isStr(pl.league_id) || !isStr(pl.player_id) || !isStr(pl.type) || !isStr(pl.from_squad_id))
+          throw new AppError(400, 'VALIDATION_ERROR', 'Invalid action payload.', { fields: ['payload'] });
+        const seenReq = await pool.query('SELECT 1 FROM roster_requests WHERE request_id=$1', [pl.request_id]);
+        if (seenReq.rowCount) {
+          results.set(i, { ...base, status: 'duplicate', resolution: 'skipped_duplicate', error_code: null, server_version: await ver(), signature: null });
+          await pool.query('INSERT INTO sync_actions VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [body.device_id, a.action_id, JSON.stringify({ duplicate: true })]);
+          continue;
+        }
+        const lg = await pool.query('SELECT 1 FROM roster_leagues WHERE league_id=$1', [pl.league_id]);
+        if (!lg.rowCount) throw new AppError(404, 'LEAGUE_NOT_FOUND', 'League not found.');
       }
       const cur = await currentVersion(a.type, a.payload);
       if (cur === null) {

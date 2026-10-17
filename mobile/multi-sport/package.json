@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/barlow-condensed": "^0.4.1",
     "@expo/ui": "~58.0.20",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-community/netinfo": "12.0.1",

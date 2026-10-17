@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { Badge } from '@/components/Badge';
-import { money } from '@/theme';
+import { C, F, money } from '@/theme';
 
 function ProductCard({ p }: { p: Product }) {
   const { addToCart } = useApp();
@@ -22,15 +22,15 @@ function ProductCard({ p }: { p: Product }) {
   const v = p.variants.find((x) => x.variant_id === vid);
   return (
     <Card testID={`product-${p.product_id}`}>
-      <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827' }}>{p.name}</Text>
+      <Text style={{ fontSize: 24, fontFamily: F.displayHeavy, color: C.text, letterSpacing: 0.5, textTransform: 'uppercase' }}>{p.name}</Text>
       {p.description ? <Text style={T.sub}>{p.description}</Text> : null}
       <View style={{ marginVertical: 8 }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 4 }}>Choose a variant</Text>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: C.sub, marginBottom: 6, letterSpacing: 0.6, textTransform: 'uppercase' }}>Choose a variant</Text>
         <Chips testIDPrefix={`variant-${p.product_id}`} value={vid} onChange={(x) => { setVid(x); setAdded(false); }} options={p.variants.map((x) => ({ value: x.variant_id, label: x.label }))} />
       </View>
       {v ? (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827' }}>{money(v.price_minor, v.currency)}</Text>
+          <Text style={{ fontSize: 34, fontFamily: F.displayHeavy, color: C.accent }}>{money(v.price_minor, v.currency)}</Text>
           {v.stock > 0 ? <Badge kind="ok" icon="checkmark-circle" text={`${v.stock} in stock`} /> : <Badge kind="bad" icon="close-circle" text="Out of stock" />}
           <Button
             label={added ? 'Added. Add another' : 'Add to cart'}
@@ -53,7 +53,16 @@ export default function Store() {
   useFocusEffect(useCallback(() => { reloadRef.current(); }, []));
   const count = cart.reduce((a, c) => a + c.quantity, 0);
   return (
-    <Screen testID="screen-store" loading={q.loading && !q.data} onRefresh={q.reload}>
+    <Screen
+      testID="screen-store"
+      loading={q.loading && !q.data}
+      onRefresh={q.reload}
+      footer={count > 0 ? (
+        <View style={{ padding: 12, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.border }}>
+          <Button label={`Checkout (${count} ${count === 1 ? 'item' : 'items'})`} icon="card" testID="checkout-sticky" onPress={() => router.push('/checkout')} />
+        </View>
+      ) : undefined}
+    >
       <CacheNote fromCache={q.fromCache} updatedAt={q.updatedAt} />
       <Button label={`View cart (${count})`} icon="cart" variant="secondary" testID="open-cart" onPress={() => router.push('/checkout')} />
       <H>Merchandise</H>

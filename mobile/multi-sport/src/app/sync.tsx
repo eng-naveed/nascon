@@ -1,3 +1,4 @@
+import { C } from '@/theme';
 import React from 'react';
 import { Alert, Text, View } from 'react-native';
 import { friendlyCode } from '@/api/client';
@@ -14,7 +15,7 @@ export default function SyncScreen() {
   return (
     <Screen testID="screen-sync">
       <Card testID="sync-summary">
-        <Text style={{ fontSize: 20, fontWeight: '800' }}>{syncing ? 'Syncing…' : online ? 'Online' : 'Offline'}</Text>
+        <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }}>{syncing ? 'Syncing…' : online ? 'Online' : 'Offline'}</Text>
         <Text style={T.sub}>{online ? 'Connected to the server.' : 'No connection. Actions you make are saved on this device and sent later.'}</Text>
       </Card>
       {lastSyncMsg ? <ErrorBanner kind="ok" message={lastSyncMsg} /> : null}

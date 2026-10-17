@@ -11,7 +11,7 @@ import { Button } from '@/components/Button';
 import { Field } from '@/components/Field';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { money, uid } from '@/theme';
+import { money, uid, C } from '@/theme';
 
 const TOKENS = [
   { value: 'tok_success', label: 'Success card' },
@@ -83,19 +83,19 @@ export default function Checkout() {
               <Text style={T.sub}>{money(c.price_minor, c.currency)} each</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
                 <Button small label="−" testID={`qty-minus-${c.variant_id}`} variant="secondary" onPress={() => setQty(c.variant_id, c.quantity - 1)} />
-                <Text style={{ fontSize: 20, fontWeight: '800' }} testID={`qty-${c.variant_id}`}>{c.quantity}</Text>
+                <Text style={{ color: C.text, fontSize: 20, fontWeight: '800' }} testID={`qty-${c.variant_id}`}>{c.quantity}</Text>
                 <Button small label="+" testID={`qty-plus-${c.variant_id}`} variant="secondary" onPress={() => setQty(c.variant_id, c.quantity + 1)} />
                 <Button small label="Remove" icon="trash" testID={`remove-${c.variant_id}`} variant="secondary" onPress={() => setQty(c.variant_id, 0)} />
               </View>
             </Card>
           ))}
           <Field label="Discount code (optional)" testID="discount-code" value={code} onChangeText={setCode} autoCapitalize="characters" placeholder="WELCOME10" />
-          <Text style={{ fontSize: 14, fontWeight: '700' }}>Payment (mock gateway)</Text>
+          <Text style={{ color: C.text, fontSize: 14, fontWeight: '700' }}>Payment (mock gateway)</Text>
           <Chips testIDPrefix="pay" value={token} onChange={setToken} options={TOKENS} />
           <Card>
             <Text style={T.sub}>Subtotal: {money(subtotal, currency)}</Text>
             {discount > 0 ? <Text style={T.sub}>Discount: -{money(discount, currency)}</Text> : null}
-            <Text style={{ fontSize: 22, fontWeight: '800' }} testID="cart-total">Total: {money(subtotal - discount, currency)}</Text>
+            <Text style={{ color: C.text, fontSize: 22, fontWeight: '800' }} testID="cart-total">Total: {money(subtotal - discount, currency)}</Text>
           </Card>
           {err ? <ErrorBanner message={err} /> : null}
           <Button label={`Buy now  ${money(subtotal - discount, currency)}`} icon="card" testID="checkout-pay" onPress={confirm} loading={busy} />

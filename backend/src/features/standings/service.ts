@@ -14,7 +14,7 @@ const leagueSchema = z.object({
   sport_id: z.string().min(1).max(64),
   teams: z.array(idSchema).min(2).max(40),
   fixtures: z.array(z.object({ match_id: idSchema, home: idSchema, away: idSchema, scheduled_at: z.string().optional() })),
-  points: z.object({ win: int, draw: int, loss: int }).optional(),
+  points: z.object({ win: int.default(3), draw: int.default(1), loss: int.default(0) }).optional(),
   tie_break_order: z.array(z.enum(TOKENS)).optional(),
   qualification: z.object({ spots: int.min(1) }),
   lots_seed: int.optional(),
@@ -28,11 +28,14 @@ export async function createLeague(c: PoolClient, body: unknown) {
   if (b.qualification.spots > b.teams.length) throw validation(['qualification.spots', 'qualification']);
   if (b.tie_break_order && new Set(b.tie_break_order).size !== b.tie_break_order.length) throw validation(['tie_break_order']);
   const ids = new Set<string>();
+  let dupMatch: string | null = null;
   for (const f of b.fixtures) {
-    if (!b.teams.includes(f.home) || !b.teams.includes(f.away) || f.home === f.away || ids.has(f.match_id)) throw validation(['fixtures']);
+    if (!b.teams.includes(f.home) || !b.teams.includes(f.away) || f.home === f.away) throw validation(['fixtures']);
+    if (ids.has(f.match_id)) dupMatch = f.match_id;
     ids.add(f.match_id);
   }
   const sport = await getSport(c, b.sport_id);
+  if (dupMatch) throw conflict('MATCH_EXISTS', `Match ${dupMatch} is listed more than once.`, { match_id: dupMatch });
   if ((await c.query('SELECT 1 FROM leagues WHERE league_id=$1', [b.league_id])).rowCount)
     throw conflict('LEAGUE_EXISTS', `League ${b.league_id} already exists.`, { league_id: b.league_id });
   for (const f of b.fixtures)

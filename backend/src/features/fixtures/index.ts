@@ -8,7 +8,7 @@ import { parse, idSchema } from '../../core/validate';
 const base = z.object({
   format: z.enum(['round_robin', 'swiss', 'single_elim', 'double_elim']),
   teams: z.array(idSchema),
-  params: z.record(z.string(), z.any()).optional(),
+  params: z.record(z.string(), z.any()).nullish(),
 });
 
 const limits: Record<string, [number, number]> = {
@@ -20,13 +20,13 @@ const limits: Record<string, [number, number]> = {
 
 const int = z.number().int();
 const rrParams = z.object({
-  legs: int.optional(),
-  withdrawals: z.array(z.object({ team_id: idSchema, after_round: int })).optional(),
-  withdrawal_policy: z.enum(['void_all', 'forfeit_remaining']).optional(),
+  legs: int.nullish(),
+  withdrawals: z.array(z.object({ team_id: idSchema, after_round: int })).nullish(),
+  withdrawal_policy: z.enum(['void_all', 'forfeit_remaining']).nullish(),
 });
 const swissParams = z.object({
-  total_rounds: int.optional(),
-  round: int.optional(),
+  total_rounds: int.nullish(),
+  round: int.nullish(),
   history: z
     .array(
       z.object({
@@ -35,12 +35,12 @@ const swissParams = z.object({
         bye: idSchema.nullable().optional(),
       }),
     )
-    .optional(),
+    .nullish(),
 });
 const elimParams = z.object({
-  results: z.array(z.object({ match_id: idSchema, winner: idSchema })).optional(),
-  third_place_match: z.boolean().optional(),
-  bracket_reset: z.boolean().optional(),
+  results: z.array(z.object({ match_id: idSchema, winner: idSchema })).nullish(),
+  third_place_match: z.boolean().nullish(),
+  bracket_reset: z.boolean().nullish(),
 });
 
 export function generateFixtures(body: unknown) {
@@ -53,7 +53,8 @@ export function generateFixtures(body: unknown) {
     try {
       return parse(schema, raw) as any;
     } catch (e: any) {
-      const fields = (e.details?.fields ?? []).map((f: string) => `params.${f}`);
+      const bare: string[] = e.details?.fields ?? [];
+      const fields = [...new Set([...bare.map((f: string) => `params.${f}`), ...bare])];
       throw validation(fields.length ? fields : ['params']);
     }
   };

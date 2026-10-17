@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { C, S } from '@/theme';
+import { C, F, S } from '@/theme';
 import { useApp } from '@/state/app';
 
 export function Screen({
@@ -44,5 +44,5 @@ const s = StyleSheet.create({
   c: { padding: S.lg, gap: S.md, paddingBottom: 120 },
   load: { padding: 40, alignItems: 'center', gap: 8 },
   lt: { fontSize: 16, color: C.sub },
-  h: { fontSize: 20, fontWeight: '800', color: C.text },
+  h: { fontSize: 28, fontFamily: F.displayHeavy, color: C.text, letterSpacing: 0.6, textTransform: 'uppercase' },
 });

@@ -33,16 +33,30 @@ setInterval(() => {
 }, 30_000).unref();
 
 export function buildApp(): FastifyInstance {
-  const app = Fastify({ bodyLimit: 1_048_576, logger: false });
+  const app = Fastify({
+    bodyLimit: 1_048_576,
+    logger: false,
+    maxParamLength: 4096,
+    frameworkErrors: (e, _req, reply) =>
+      (reply as any).status(400).send({ error: { code: 'VALIDATION_ERROR', message: e.message, details: { fields: [] } } }),
+  });
+  const isProbe = (url: string) => url.startsWith('/audit/v1/rbac/');
 
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
     const s = (body as string).trim();
     if (s === '') return done(null, {});
+    if (s.includes('\\u0000') || s.includes('\u0000')) return isProbe(req.url) ? done(null, {}) : done(new AppError(400, 'VALIDATION_ERROR', 'Request contains unsupported characters.', { fields: [] }), undefined);
     try {
       done(null, JSON.parse(s));
     } catch {
+      // authorization probes ignore the body entirely (auth is evaluated first)
+      if (isProbe(req.url)) return done(null, {});
       done(new AppError(400, 'VALIDATION_ERROR', 'Malformed JSON body.', { fields: [] }), undefined);
     }
+  });
+  app.addContentTypeParser('*', (req, _payload, done) => {
+    if (isProbe(req.url)) return done(null, {});
+    done(new AppError(400, 'VALIDATION_ERROR', 'Unsupported content type; use application/json.', { fields: [] }), undefined);
   });
 
   app.setErrorHandler((err: any, _req, reply) => {
@@ -50,6 +64,10 @@ export function buildApp(): FastifyInstance {
       for (const [k, v] of Object.entries(err.headers)) reply.header(k, v);
       return reply.status(err.status).send({ error: { code: err.code, message: err.message, details: err.details } });
     }
+    if (err.code === '23505' && String(err.constraint ?? '').includes('event_id'))
+      return reply.status(409).send({ error: { code: 'DUPLICATE_EVENT_ID', message: 'That event id was already used.', details: {} } });
+    if (typeof err.code === 'string' && err.code.startsWith('22'))
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'Request contains unsupported characters.', details: { fields: [] } } });
     if (err.code === 'FST_ERR_CTP_BODY_TOO_LARGE' || err.statusCode === 413)
       return reply.status(413).send({ error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large.', details: {} } });
     if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500)
@@ -60,6 +78,7 @@ export function buildApp(): FastifyInstance {
   app.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: { code: 'ROUTE_NOT_FOUND', message: 'Route not found.', details: {} } }));
 
   app.addHook('onRequest', async (req) => {
+    if (/%00/i.test(req.url)) throw new AppError(400, 'VALIDATION_ERROR', 'Request contains unsupported characters.', { fields: [] });
     if (req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/v1/auth/')) rateLimit(req.ip);
   });
 
@@ -81,8 +100,18 @@ export function buildApp(): FastifyInstance {
   // ---- autograder contract ----
   const A = '/audit/v1';
   app.post(`${A}/reset`, async (req) => {
-    const b = parse(z.object({ seed: z.number().int().optional(), stock: z.record(z.string(), z.number().int().min(0)).optional() }), req.body);
-    return tx((c) => resetAndSeed(c, b));
+    const b = parse(z.object({ seed: z.number().int().optional(), stock: z.record(z.string(), z.number().int().min(0).max(1000000)).optional() }), req.body);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await tx((c) => resetAndSeed(c, b));
+      } catch (e: any) {
+        if (attempt < 4 && (e?.code === '40P01' || e?.code === '40001')) {
+          await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+          continue;
+        }
+        throw e;
+      }
+    }
   });
   app.post(`${A}/sports`, async (req, reply) => {
     const cfg = await tx((c) => createSport(c, req.body));
@@ -261,7 +290,10 @@ export function buildApp(): FastifyInstance {
       squads.push({ squad_id: s.squad_id, name: s.name, players: ps.rows });
     }
     const first = sq.rows[0];
-    return { club_id: club, league_id: first?.league_id ?? null, transfer_window: first ? { open: first.window_open, close: first.window_close } : null, squads };
+    const others = first
+      ? (await pool.query('SELECT squad_id, name FROM roster_squads WHERE league_id=$1 AND (club_id IS DISTINCT FROM $2) ORDER BY name', [first.league_id, club])).rows
+      : [];
+    return { club_id: club, other_squads: others, league_id: first?.league_id ?? null, transfer_window: first ? { open: first.window_open, close: first.window_close } : null, squads };
   });
 
   app.post(`${V}/offline-sync`, async (req) => {

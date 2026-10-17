@@ -45,7 +45,7 @@ function homeFirst(i: number, j: number, n: number): boolean {
 export function generateRoundRobin(teams: string[], params: RRParams = {}) {
   const n = teams.length;
   const legs = params.legs ?? 1;
-  if (legs !== 1 && legs !== 2) throw validation(['params.legs']);
+  if (legs !== 1 && legs !== 2) throw validation(['params.legs', 'legs']);
   const policy = params.withdrawal_policy ?? 'forfeit_remaining';
   const base = circleRounds(n);
   const perLeg = base.length;
@@ -53,9 +53,9 @@ export function generateRoundRobin(teams: string[], params: RRParams = {}) {
 
   const withdrawn = new Map<string, number>();
   for (const w of params.withdrawals ?? []) {
-    if (!teams.includes(w.team_id)) throw validation(['params.withdrawals']);
+    if (!teams.includes(w.team_id)) throw validation(['params.withdrawals', 'withdrawals']);
     if (!Number.isInteger(w.after_round) || w.after_round < 0 || w.after_round > roundCount)
-      throw validation(['params.withdrawals']);
+      throw validation(['params.withdrawals', 'withdrawals']);
     const prev = withdrawn.get(w.team_id);
     withdrawn.set(w.team_id, prev === undefined ? w.after_round : Math.min(prev, w.after_round));
   }

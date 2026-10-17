@@ -74,8 +74,9 @@ export function verifyJwt(token: string, secret: string): JwtClaims | null {
   try {
     const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
     if (header.alg !== 'HS256') return null;
-    const expected = createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest();
-    const given = Buffer.from(parts[2], 'base64url');
+    // compare the encoded strings (not decoded bytes) so non-canonical base64url tails are rejected
+    const expected = Buffer.from(createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest('base64url'));
+    const given = Buffer.from(parts[2]);
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
     const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as JwtClaims;
     if (typeof claims.exp !== 'number' || claims.exp <= Math.floor(Date.now() / 1000)) return null;

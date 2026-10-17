@@ -9,7 +9,7 @@ import { Button } from '@/components/Button';
 import { Field } from '@/components/Field';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { Chips } from '@/components/Chips';
-import { C, onColor } from '@/theme';
+import { C, F, onColor } from '@/theme';
 
 const DEMOS = [
   { value: 'admin@nascon.test', label: 'Admin' },
@@ -45,9 +45,9 @@ export default function Login() {
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.c} keyboardShouldPersistTaps="handled">
-          <View style={[s.logo, { backgroundColor: primary }]}>
-            <Ionicons name="trophy" size={36} color={onColor(primary)} />
-          </View>
+          <View style={s.ring}><View style={[s.logo, { backgroundColor: primary }]}>
+            <Ionicons name="trophy" size={40} color={onColor(primary)} />
+          </View></View>
           <Text style={s.title} accessibilityRole="header">NaSCon League</Text>
           <Text style={s.sub}>Sign in to follow fixtures, standings and your club.</Text>
           {!online ? <ErrorBanner kind="warn" message="You are offline. Connect to the internet or check the server address to sign in." /> : null}
@@ -65,8 +65,9 @@ export default function Login() {
 }
 const s = StyleSheet.create({
   c: { padding: 20, gap: 14 },
-  logo: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  title: { fontSize: 28, fontWeight: '800', color: C.text, textAlign: 'center' },
-  sub: { fontSize: 15, color: C.sub, textAlign: 'center' },
-  lbl: { fontSize: 14, color: C.sub, fontWeight: '600' },
+  ring: { alignSelf: 'center', width: 104, height: 104, borderRadius: 52, borderWidth: 2, borderColor: C.border, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  logo: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 44, fontFamily: F.displayHeavy, color: C.text, textAlign: 'center', letterSpacing: 2, textTransform: 'uppercase' },
+  sub: { fontSize: 15, color: C.sub, textAlign: 'center', marginBottom: 8 },
+  lbl: { fontSize: 13, color: C.sub, fontWeight: '700', marginTop: 8 },
 });

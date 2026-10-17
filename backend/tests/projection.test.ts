@@ -57,6 +57,11 @@ describe('event-sourced projection', () => {
     expect(v.home.wickets).toBeNull();
     expect(v.away.score).toBe(2);
   });
+  it('treats prototype keys as unknown event types', () => {
+    n = 0;
+    const v = project(sport('football'), meta('football'), [ev('match_start'), score('h', 'constructor'), score('h', '__proto__')]);
+    expect(v.home.score).toBe(0);
+  });
   it('ignores unknown event types and unknown teams', () => {
     n = 0;
     const v = project(sport('football'), meta('football'), [ev('match_start'), score('h', 'nope'), score('zz', 'goal')]);

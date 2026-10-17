@@ -12,7 +12,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { CacheNote } from '@/components/CacheNote';
 import { LeaguePicker, useLeagues } from '@/components/LeaguePicker';
-import { C } from '@/theme';
+import { TeamMark } from '@/components/TeamMark';
+import { C, F } from '@/theme';
 
 function QBadge({ status }: { status: StandingRow['status'] }) {
   if (status === 'clinched') return <Badge kind="ok" icon="checkmark-circle" text="Clinched" />;
@@ -44,9 +45,12 @@ export default function StandingsScreen() {
         return (
           <Card key={r.team_id} testID={`standing-${r.team_id}`} label={`Rank ${r.rank} ${nm}, ${r.points} points, ${r.status.replace('_', ' ')}`} onPress={() => router.push({ pathname: '/club/[id]', params: { id: r.team_id, name: nm } })}>
             <View style={s.head}>
-              <Text style={s.rank}>{r.rank}</Text>
+              <View style={[s.rankBox, r.rank <= (st.data?.qualification_spots ?? 0) && { backgroundColor: C.accent, borderColor: C.accent }]}>
+                <Text style={[s.rank, r.rank <= (st.data?.qualification_spots ?? 0) && { color: C.bg }]}>{r.rank}</Text>
+              </View>
+              <TeamMark id={r.team_id} name={nm} size={40} />
               <Text style={s.name} numberOfLines={2}>{nm}</Text>
-              <Text style={s.pts}>{r.points} pts</Text>
+              <Text style={s.pts}>{r.points}<Text style={s.ptsLbl}> pts</Text></Text>
             </View>
             <Text style={s.stats}>P {r.played}  W {r.won}  D {r.drawn}  L {r.lost}  GD {r.diff}</Text>
             <QBadge status={r.status} />
@@ -58,8 +62,10 @@ export default function StandingsScreen() {
 }
 const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rank: { fontSize: 20, fontWeight: '800', color: C.text, minWidth: 28 },
-  name: { flex: 1, fontSize: 17, fontWeight: '700', color: C.text },
-  pts: { fontSize: 18, fontWeight: '800', color: C.text },
-  stats: { fontSize: 14, color: C.sub, marginVertical: 6 },
+  rankBox: { width: 34, height: 34, borderRadius: 10, borderWidth: 1.5, borderColor: C.border, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' },
+  rank: { fontSize: 22, fontFamily: F.displayHeavy, color: C.text },
+  name: { flex: 1, fontSize: 16, fontWeight: '800', color: C.text },
+  pts: { fontSize: 30, fontFamily: F.displayHeavy, color: C.accent },
+  ptsLbl: { fontSize: 14, fontFamily: F.display, color: C.sub },
+  stats: { fontSize: 13, color: C.sub, marginVertical: 8, fontWeight: '600', letterSpacing: 0.3 },
 });

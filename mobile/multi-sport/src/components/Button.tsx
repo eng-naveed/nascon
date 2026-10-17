@@ -16,8 +16,8 @@ type Props = {
 };
 export function Button({ label, onPress, testID, icon, variant = 'primary', loading, disabled, small }: Props) {
   const { primary } = useApp();
-  const bg = variant === 'primary' ? primary : variant === 'danger' ? C.bad : C.card;
-  const fg = variant === 'secondary' ? C.text : onColor(variant === 'danger' ? C.bad : primary);
+  const bg = variant === 'primary' ? primary : variant === 'danger' ? C.live : C.card2;
+  const fg = variant === 'secondary' ? C.text : onColor(variant === 'danger' ? C.live : primary);
   const off = disabled || loading;
   return (
     <Pressable
@@ -28,7 +28,11 @@ export function Button({ label, onPress, testID, icon, variant = 'primary', load
       onPress={off ? undefined : onPress}
       style={({ pressed }) => [
         s.btn,
-        { backgroundColor: bg, opacity: off ? 0.5 : pressed ? 0.85 : 1, borderColor: variant === 'secondary' ? C.border : bg },
+        {
+          backgroundColor: bg, opacity: off ? 0.5 : 1, borderColor: variant === 'secondary' ? C.border : bg,
+          transform: [{ scale: pressed ? 0.97 : 1 }],
+        },
+        variant === 'primary' && { shadowColor: primary, shadowOpacity: 0.45, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
         small && { minHeight: 48, paddingHorizontal: 12 },
       ]}
     >
@@ -42,7 +46,7 @@ export function Button({ label, onPress, testID, icon, variant = 'primary', load
   );
 }
 const s = StyleSheet.create({
-  btn: { minHeight: 52, minWidth: 48, borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center', borderWidth: 1.5 },
+  btn: { minHeight: 54, minWidth: 48, borderRadius: 16, paddingHorizontal: 18, justifyContent: 'center', borderWidth: 1.5 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  txt: { fontSize: 16, fontWeight: '700', textAlign: 'center', flexShrink: 1 },
+  txt: { fontSize: 16, fontWeight: '800', textAlign: 'center', flexShrink: 1, letterSpacing: 0.3 },
 });

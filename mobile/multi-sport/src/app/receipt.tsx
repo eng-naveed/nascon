@@ -9,7 +9,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
-import { money } from '@/theme';
+import { money, C } from '@/theme';
 
 export default function ReceiptScreen() {
   const { receipt } = useApp();
@@ -44,14 +44,14 @@ export default function ReceiptScreen() {
       <H>Receipt</H>
       <Card testID="receipt-card">
         <Text style={T.sub}>Order</Text>
-        <Text style={{ fontSize: 16, fontWeight: '800' }} testID="receipt-order-id" selectable>{p.order_id}</Text>
+        <Text style={{ color: C.text, fontSize: 16, fontWeight: '800' }} testID="receipt-order-id" selectable>{p.order_id}</Text>
         {p.paid_at ? <Text style={T.sub}>Paid: {new Date(p.paid_at).toLocaleString()}</Text> : null}
         {p.items.map((i) => (
           <Text key={i.variant_id} style={T.body}>{i.quantity} x {i.variant_id} @ {money(i.unit_price_minor, p.currency)}</Text>
         ))}
         <Text style={T.sub}>Subtotal: {money(p.subtotal_minor, p.currency)}</Text>
         {p.discount_minor > 0 ? <Text style={T.sub}>Discount: -{money(p.discount_minor, p.currency)}</Text> : null}
-        <Text style={{ fontSize: 22, fontWeight: '800' }} testID="receipt-total">Total: {money(p.total_minor, p.currency)}</Text>
+        <Text style={{ color: C.text, fontSize: 22, fontWeight: '800' }} testID="receipt-total">Total: {money(p.total_minor, p.currency)}</Text>
       </Card>
       {msg ? <ErrorBanner kind={msg.k} message={msg.t} /> : null}
       <Button label="Download / share PDF" icon="download" testID="receipt-download" onPress={download} loading={busy} />
