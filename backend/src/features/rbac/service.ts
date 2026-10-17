@@ -2,9 +2,9 @@ import { config } from '../../core/config';
 import { JwtClaims, signJwt, verifyJwt } from '../../core/crypto';
 import { pool } from '../../core/db';
 import { AppError, forbidden, notFound, unauthenticated } from '../../core/errors';
+import { decide } from './policy';
 
 export const jwtSecret = () => 'nascon-jwt|' + config.salt;
-export type Role = 'super_admin' | 'league_organizer' | 'club_manager' | 'player' | 'viewer';
 
 export function authenticate(header: string | undefined): JwtClaims {
   if (!header || !/^Bearer\s+\S+$/i.test(header)) throw unauthenticated();
@@ -38,45 +38,14 @@ async function entity(kind: string, id: string) {
   return r.rowCount ? (r.rows[0] as { tenant_id: string; club_id: string | null }) : null;
 }
 
-const sameTenant = (u: JwtClaims, e: { tenant_id: string }) => u.tenant_id === e.tenant_id;
+const KIND: Record<string, string> = { 'league-fixtures': 'league', 'club-roster': 'club', 'club-products': 'club', 'player-patch': 'player', 'club-get': 'club' };
 
-/** Evaluates a probe; authorization is decided before existence of the target. */
 export async function probe(route: string, u: JwtClaims, id?: string): Promise<{ authorized: true }> {
-  const role = u.role as Role;
-  const sa = role === 'super_admin';
-  const notFoundFor = (kind: string) => notFound(`${kind.toUpperCase()}_NOT_FOUND`, `${kind} ${id} not found.`, { id });
-  switch (route) {
-    case 'tenants':
-    case 'platform-config':
-      if (!sa) throw forbidden();
-      return { authorized: true };
-    case 'league-fixtures': {
-      const e = await entity('league', id!);
-      if (!sa && !(role === 'league_organizer' && e && sameTenant(u, e) && u.league_id === id)) throw forbidden();
-      if (!e) throw notFoundFor('league');
-      return { authorized: true };
-    }
-    case 'club-roster':
-    case 'club-products': {
-      const e = await entity('club', id!);
-      if (!sa && !(role === 'club_manager' && e && sameTenant(u, e) && u.club_id === id)) throw forbidden();
-      if (!e) throw notFoundFor('club');
-      return { authorized: true };
-    }
-    case 'player-patch': {
-      const e = await entity('player', id!);
-      const ok = !!e && ((role === 'club_manager' && sameTenant(u, e) && e.club_id === u.club_id) || (role === 'player' && u.player_id === id));
-      if (!sa && !ok) throw forbidden();
-      if (!e) throw notFoundFor('player');
-      return { authorized: true };
-    }
-    case 'club-get': {
-      const e = await entity('club', id!);
-      if (!sa && !(e && sameTenant(u, e))) throw forbidden();
-      if (!e) throw notFoundFor('club');
-      return { authorized: true };
-    }
-    default:
-      throw new AppError(404, 'NOT_FOUND', 'Unknown probe.');
-  }
+  if (!(route in KIND) && route !== 'tenants' && route !== 'platform-config') throw new AppError(404, 'NOT_FOUND', 'Unknown probe.');
+  const kind = KIND[route];
+  const e = kind && id ? await entity(kind, id) : null;
+  const d = decide(route, u, id, e);
+  if (d === 'deny') throw forbidden();
+  if (d === 'missing') throw notFound(`${kind.toUpperCase()}_NOT_FOUND`, `${kind} ${id} not found.`, { id });
+  return { authorized: true };
 }

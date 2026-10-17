@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { bodyHash } from '../../core/crypto';
-import { conflict, notFound, validation } from '../../core/errors';
+import { notFound, validation } from '../../core/errors';
+import { checkTransferRules } from './rules';
 import { idSchema, parse } from '../../core/validate';
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((s) => !Number.isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().startsWith(s), 'bad date');
@@ -122,29 +123,22 @@ export async function transfer(c: PoolClient, rawBody: unknown): Promise<{ statu
   };
   const from = await sq(b.from_squad_id);
   const to = b.type === 'release' ? null : await sq(b.to_squad_id!);
-  if (from.tenant_id !== league.tenant_id || (to && to.tenant_id !== league.tenant_id))
-    throw conflict('CROSS_TENANT_TRANSFER', 'Squads must belong to the same tenant as the league.', { league_id: b.league_id });
-
   await materializeReturn(c, b.player_id, b.effective_date);
   const regRow = (await c.query('SELECT * FROM roster_regs WHERE player_id=$1', [b.player_id])).rows[0];
-  if (!regRow || regRow.league_id !== b.league_id || regRow.squad_id !== b.from_squad_id)
-    throw conflict('NOT_IN_SQUAD', `Player ${b.player_id} is not in squad ${b.from_squad_id}.`, { player_id: b.player_id, squad_id: b.from_squad_id });
-
   const moving = b.type !== 'release';
-  if (moving && (b.effective_date < league.window_open || b.effective_date > league.window_close))
-    throw conflict('TRANSFER_WINDOW_CLOSED', 'The transfer window is closed on that date.', { window: { open: league.window_open, close: league.window_close } });
-  if (regRow.reg_type === 'loan') throw conflict('PLAYER_ON_LOAN', 'The player is currently on loan.', { player_id: b.player_id });
-  if (moving) {
-    const n = Number((await c.query('SELECT count(*)::int AS n FROM roster_regs WHERE league_id=$1 AND squad_id=$2', [b.league_id, b.to_squad_id])).rows[0].n);
-    if (n + 1 > league.max_squad_size) throw conflict('SQUAD_FULL', 'The destination squad is full.', { squad_id: b.to_squad_id });
-  }
-  const minReq = league.required_positions?.[player.position];
-  if (minReq !== undefined) {
-    const n = Number(
-      (await c.query('SELECT count(*)::int AS n FROM roster_regs g JOIN roster_players p ON p.player_id=g.player_id WHERE g.league_id=$1 AND g.squad_id=$2 AND p.position=$3', [b.league_id, b.from_squad_id, player.position])).rows[0].n,
-    );
-    if (n - 1 < minReq) throw conflict('MIN_POSITION_VIOLATION', `The squad would drop below the minimum for position ${player.position}.`, { position: player.position });
-  }
+  const destCount = moving
+    ? Number((await c.query('SELECT count(*)::int AS n FROM roster_regs WHERE league_id=$1 AND squad_id=$2', [b.league_id, b.to_squad_id])).rows[0].n)
+    : 0;
+  const posCount = Number(
+    (await c.query('SELECT count(*)::int AS n FROM roster_regs g JOIN roster_players p ON p.player_id=g.player_id WHERE g.league_id=$1 AND g.squad_id=$2 AND p.position=$3', [b.league_id, b.from_squad_id, player.position])).rows[0].n,
+  );
+  checkTransferRules({
+    type: b.type, leagueTenant: league.tenant_id, fromTenant: from.tenant_id, toTenant: to ? to.tenant_id : null,
+    currentSquad: regRow?.squad_id ?? null, fromSquadId: b.from_squad_id, leagueMatches: !!regRow && regRow.league_id === b.league_id,
+    regType: regRow?.reg_type ?? null, effectiveDate: b.effective_date, windowOpen: league.window_open, windowClose: league.window_close,
+    destCount, maxSquad: league.max_squad_size, position: player.position, positionCountInFrom: posCount,
+    requiredMin: league.required_positions?.[player.position], playerId: b.player_id, toSquadId: b.to_squad_id ?? null,
+  });
 
   const blocking = (league.matches_in_progress as any[]).find((m) => m.home_squad_id === b.from_squad_id || m.away_squad_id === b.from_squad_id);
   const state = blocking ? 'deferred_until_match_end' : 'active';
