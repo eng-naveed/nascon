@@ -35,7 +35,15 @@ export const uniq = (p: string) => `${p}-${Date.now().toString(36)}-${(uid++).to
 export async function boot(name: string): Promise<Ctx> {
   const dbName = `t_${name.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}_${process.pid}`;
   const admin = new pg.Client({ connectionString: ADMIN_URL });
-  await admin.connect();
+  try {
+    await admin.connect();
+  } catch (e: any) {
+    throw new Error(
+      `API tests need a throwaway Postgres at ${ADMIN_URL} (set TEST_PG_URL to override). Start one with:\n` +
+        '  docker run -d --rm --name nascon-test-pg -e POSTGRES_PASSWORD=t -e POSTGRES_USER=t -e POSTGRES_DB=t -p 55432:5432 postgres:16-alpine\n' +
+        `(${e?.message ?? e})`,
+    );
+  }
   await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
   await admin.query(`CREATE DATABASE ${dbName}`);
   await admin.end();
