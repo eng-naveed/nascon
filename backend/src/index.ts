@@ -1,15 +1,10 @@
 import { buildApp } from './app';
 import { config } from './core/config';
 import { pool, tx } from './core/db';
-import { getGateway } from './features/payments/gateway';
 import { migrate } from './core/migrate';
 import { resetAndSeed } from './core/seed';
 
 async function main() {
-  if (config.paymentProvider === 'stripe') {
-    getGateway(); // throws on a malformed STRIPE_SECRET_KEY: fail at boot, not at first checkout
-    if (!config.stripe.webhookSecret) throw new Error('STRIPE_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=stripe');
-  }
   for (let i = 0; ; i++) {
     try {
       await pool.query('SELECT 1');

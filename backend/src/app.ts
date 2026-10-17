@@ -13,7 +13,6 @@ import { appendEvent, getScore } from './features/events/service';
 import { history, setupRoster, transfer, rosterVersion } from './features/roster/service';
 import { checkout, inventory } from './features/store/service';
 import { authenticate, mintToken, probe, rbacMatrix } from './features/rbac/service';
-import { handleStripeWebhook } from './features/payments/webhook';
 import { offlineSync } from './features/offline/service';
 
 const hits = new Map<string, number[]>();
@@ -39,7 +38,6 @@ export function buildApp(): FastifyInstance {
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
     const s = (body as string).trim();
     if (s === '') return done(null, {});
-    if (_req.url === '/webhooks/stripe') (_req as any).rawBody = s; // signature is computed over the exact bytes
     try {
       done(null, JSON.parse(s));
     } catch {
@@ -79,10 +77,6 @@ export function buildApp(): FastifyInstance {
     }
     return reply.status(503).send({ status: 'unavailable' });
   });
-
-  // ---- stripe webhook (only exists when PAYMENT_PROVIDER=stripe; authenticated by signature) ----
-  if (config.paymentProvider === 'stripe')
-    app.post('/webhooks/stripe', async (req) => handleStripeWebhook((req as any).rawBody, req.headers['stripe-signature'] as string | undefined));
 
   // ---- autograder contract ----
   const A = '/audit/v1';

@@ -19,10 +19,6 @@ services:
       DAY1_SALT: ${DAY1_SALT}
       DATABASE_URL: postgres://nascon:nascon@db:5432/nascon
       PORT: "8080"
-      # Mock gateway unless PAYMENT_PROVIDER=stripe. Secrets come from .env, never from this file.
-      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
       - "8080:8080"
     depends_on:
