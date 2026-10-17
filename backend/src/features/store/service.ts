@@ -4,7 +4,6 @@ import { bodyHash, sign } from '../../core/crypto';
 import { pool, tx } from '../../core/db';
 import { AppError, conflict, notFound, validation } from '../../core/errors';
 import { idSchema, parse } from '../../core/validate';
-import { getGateway } from '../payments/gateway';
 import { receiptPdf } from './pdf';
 
 const checkoutSchema = z.object({
@@ -14,6 +13,13 @@ const checkoutSchema = z.object({
   discount_code: z.string().max(64).nullable().optional(),
   payment: z.object({ token: z.string().min(1).max(100) }),
 });
+
+/** Mock payment gateway. */
+function gateway(token: string) {
+  if (token === 'tok_success') return { authorize: true, capture: true };
+  if (token === 'tok_capture_fail') return { authorize: true, capture: false };
+  return { authorize: false, capture: false };
+}
 
 export async function checkout(rawBody: unknown, actor?: { sub: string }) {
   const body = parse(checkoutSchema, rawBody);
@@ -56,14 +62,17 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
       if (restock) await c.query('DELETE FROM orders WHERE order_id=$1', [body.order_id]);
     });
 
-  const total = subtotal - discount;
-  const pay = await getGateway().charge({ orderId: body.order_id, amountMinor: total, currency: 'PKR', token: body.payment.token });
-  if (!pay.ok) {
+  const gw = gateway(body.payment.token);
+  if (!gw.authorize) {
     await release(true);
-    if (pay.reason === 'declined') throw new AppError(402, 'PAYMENT_DECLINED', 'The payment was declined.', { order_id: body.order_id });
+    throw new AppError(402, 'PAYMENT_DECLINED', 'The payment was declined.', { order_id: body.order_id });
+  }
+  if (!gw.capture) {
+    await release(true);
     throw new AppError(402, 'PAYMENT_CAPTURE_FAILED', 'The payment could not be captured.', { order_id: body.order_id });
   }
 
+  const total = subtotal - discount;
   const paidAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
   const payload = {
     order_id: body.order_id, customer_id: body.customer_id, items, subtotal_minor: subtotal, discount_minor: discount,
@@ -71,7 +80,7 @@ export async function checkout(rawBody: unknown, actor?: { sub: string }) {
   };
   const response = {
     order_id: body.order_id, status: 'paid', currency: 'PKR', items, subtotal_minor: subtotal, discount_minor: discount, total_minor: total,
-    payment: { authorization_id: pay.authorizationId, capture_id: pay.captureId, state: 'captured' },
+    payment: { authorization_id: `auth_${body.order_id}`, capture_id: `cap_${body.order_id}`, state: 'captured' },
     receipt: {
       payload,
       signature: sign(config.salt, body.order_id, payload),
