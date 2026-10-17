@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { haptic } from './feedback';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { C } from '@/theme';
@@ -7,6 +8,11 @@ import { Button } from './Button';
 export function ErrorBanner({ message, onRetry, kind = 'bad' }: { message: string; onRetry?: () => void; kind?: 'bad' | 'ok' | 'warn' }) {
   const col = kind === 'ok' ? [C.ok, C.okBg] : kind === 'warn' ? [C.warn, C.warnBg] : [C.bad, C.badBg];
   const icon = kind === 'ok' ? 'checkmark-circle' : kind === 'warn' ? 'warning' : 'alert-circle';
+  // Light haptic when a success/error message appears (offline "warn" notes stay silent).
+  useEffect(() => {
+    if (kind === 'ok') haptic('success');
+    else if (kind === 'bad') haptic('error');
+  }, [kind, message]);
   return (
     <View style={[s.w, { backgroundColor: col[1], borderColor: col[0] }]} testID={`banner-${kind}`} accessibilityRole="alert" accessible accessibilityLabel={message}>
       <View style={s.row}>
