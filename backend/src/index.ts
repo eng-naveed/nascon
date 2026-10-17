@@ -3,6 +3,7 @@ import { config } from './core/config';
 import { pool, tx } from './core/db';
 import { migrate } from './core/migrate';
 import { resetAndSeed } from './core/seed';
+import { processQueueOnce } from './features/orders/service';
 
 async function main() {
   for (let i = 0; ; i++) {
@@ -17,6 +18,10 @@ async function main() {
   await migrate();
   const seeded = await pool.query('SELECT count(*)::int AS n FROM tenants');
   if (seeded.rows[0].n === 0) await tx((c) => resetAndSeed(c, {}));
+  // internal job queue consumer
+  setInterval(() => {
+    processQueueOnce().catch(() => undefined);
+  }, 1000).unref();
   const app = buildApp();
   await app.listen({ port: config.port, host: '0.0.0.0' });
   console.log(`API listening on :${config.port}`);

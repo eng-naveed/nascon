@@ -14,6 +14,8 @@ import { history, setupRoster, transfer, rosterVersion } from './features/roster
 import { checkout, inventory } from './features/store/service';
 import { authenticate, mintToken, probe, rbacMatrix } from './features/rbac/service';
 import { offlineSync } from './features/offline/service';
+import { getOrder, listQueue, transitionOrder } from './features/orders/service';
+import { inc, renderMetrics } from './core/metrics';
 
 const hits = new Map<string, number[]>();
 function rateLimit(ip: string) {
@@ -77,6 +79,14 @@ export function buildApp(): FastifyInstance {
   });
   app.setNotFoundHandler((_req, reply) => reply.status(404).send({ error: { code: 'ROUTE_NOT_FOUND', message: 'Route not found.', details: {} } }));
 
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.url.startsWith('/metrics')) return;
+    const route = req.routeOptions?.url ?? 'unmatched';
+    inc('http_requests_total', { method: req.method, route, status: reply.statusCode });
+    inc('http_request_duration_seconds_sum', { route }, reply.elapsedTime / 1000);
+    inc('http_request_duration_seconds_count', { route });
+  });
+
   app.addHook('onRequest', async (req) => {
     if (/%00/i.test(req.url)) throw new AppError(400, 'VALIDATION_ERROR', 'Request contains unsupported characters.', { fields: [] });
     if (req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/v1/auth/')) rateLimit(req.ip);
@@ -95,6 +105,12 @@ export function buildApp(): FastifyInstance {
       /* fallthrough */
     }
     return reply.status(503).send({ status: 'unavailable' });
+  });
+
+  // ---- Prometheus metrics (text exposition format) ----
+  app.get('/metrics', async (_req, reply) => {
+    const q = await pool.query('SELECT count(*)::int AS n FROM queue_events WHERE processed_at IS NULL').catch(() => null);
+    return reply.header('content-type', 'text/plain; version=0.0.4; charset=utf-8').send(renderMetrics({ queue_pending_events: q?.rows[0].n ?? 0 }));
   });
 
   // ---- autograder contract ----
@@ -294,6 +310,25 @@ export function buildApp(): FastifyInstance {
       ? (await pool.query('SELECT squad_id, name FROM roster_squads WHERE league_id=$1 AND (club_id IS DISTINCT FROM $2) ORDER BY name', [first.league_id, club])).rows
       : [];
     return { club_id: club, other_squads: others, league_id: first?.league_id ?? null, transfer_window: first ? { open: first.window_open, close: first.window_close } : null, squads };
+  });
+
+  // ---- order lifecycle (FR-2.3) and internal queue inspection ----
+  app.get(`${V}/orders/:id`, async (req) => {
+    const u = auth(req);
+    if (u.role !== 'super_admin' && u.role !== 'league_organizer' && u.role !== 'club_manager') throw forbidden();
+    return getOrder((req.params as any).id);
+  });
+  app.post(`${V}/orders/:id/status`, async (req) => {
+    const u = auth(req);
+    if (u.role !== 'super_admin') throw forbidden();
+    const b = parse(z.object({ status: z.string() }), req.body);
+    return transitionOrder((req.params as any).id, b.status, u.sub);
+  });
+  app.get(`${V}/admin/queue`, async (req) => {
+    const u = auth(req);
+    if (u.role !== 'super_admin') throw forbidden();
+    const n = Math.min(200, Math.max(1, Number(q(req).limit ?? 50) || 50));
+    return listQueue(n);
   });
 
   app.post(`${V}/offline-sync`, async (req) => {
