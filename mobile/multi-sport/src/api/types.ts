@@ -87,6 +87,7 @@ export type Sport = { sport_id: string; name: string; scoring_model?: string; sc
 export type Roster = {
   squads: { squad_id: string; name: string; players: { player_id: string; name: string; position: string; role: string }[] }[];
   league_id: string;
+  other_squads?: { squad_id: string; name: string }[];
   transfer_window?: { open: string; close: string };
 };
 export type Receipt = {

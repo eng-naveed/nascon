@@ -53,7 +53,16 @@ export default function Store() {
   useFocusEffect(useCallback(() => { reloadRef.current(); }, []));
   const count = cart.reduce((a, c) => a + c.quantity, 0);
   return (
-    <Screen testID="screen-store" loading={q.loading && !q.data} onRefresh={q.reload}>
+    <Screen
+      testID="screen-store"
+      loading={q.loading && !q.data}
+      onRefresh={q.reload}
+      footer={count > 0 ? (
+        <View style={{ padding: 12, backgroundColor: C.bg, borderTopWidth: 1, borderTopColor: C.border }}>
+          <Button label={`Checkout (${count} ${count === 1 ? 'item' : 'items'})`} icon="card" testID="checkout-sticky" onPress={() => router.push('/checkout')} />
+        </View>
+      ) : undefined}
+    >
       <CacheNote fromCache={q.fromCache} updatedAt={q.updatedAt} />
       <Button label={`View cart (${count})`} icon="cart" variant="secondary" testID="open-cart" onPress={() => router.push('/checkout')} />
       <H>Merchandise</H>
