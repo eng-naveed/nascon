@@ -1,6 +1,6 @@
 # Traceability matrix
 
-Paths are relative to the repo root. "Unit" = `backend/tests/*.test.ts` (vitest), "Smoke" = `backend/tests/integration/smoke.py` (live stack).
+Paths are relative to the repo root. "Unit" = `backend/tests/*.test.ts` (vitest), "API" = `backend/tests/api/*.test.ts` (Fastify inject against a real Postgres), "Smoke" = `backend/tests/integration/smoke.py` (live stack).
 
 | ID | Requirement | Source | Tests |
 |---|---|---|---|

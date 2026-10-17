@@ -54,7 +54,7 @@ The seed also contains demo league `league-alpha-1` ("Alpha Premier League", 4 c
 ./run_tests.sh --integration   # plus the API smoke test (needs the stack up, DAY1_SALT set)
 ```
 
-`COVERAGE.json` reports line coverage of the pure domain-logic modules per area (fixtures, scoring + signatures, standings, store receipt/PDF, roster rules, RBAC policy). SQL service layers and route handlers are exercised by `backend/tests/integration/smoke.py` (end-to-end against the live stack: signatures, idempotency, compensation, standings, roster, 20-way checkout race, RBAC matrix, rate limit, body-size limit, offline sync), not by line coverage.
+`run_tests.sh` starts a throwaway Postgres (`postgres:16-alpine`, random port, removed on exit), runs the unit tests plus the API integration tests (`backend/tests/api`: the real Fastify app via `inject()` against a real database), and regenerates `COVERAGE.json`. Each area is measured over **all** of its source files (domain logic and SQL service layers); figures are rounded down. Without Docker the API tests are skipped and the lower, honest figures are written instead. `backend/tests/integration/smoke.py` additionally exercises the live docker-compose stack end to end.
 
 ## Layout
 
