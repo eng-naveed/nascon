@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS variants (
   stock integer NOT NULL CHECK (stock >= 0), reserved integer NOT NULL DEFAULT 0 CHECK (reserved >= 0));
 CREATE TABLE IF NOT EXISTS orders (order_id text PRIMARY KEY, body_hash text NOT NULL, status text NOT NULL, response jsonb, customer_id text, created_at timestamptz DEFAULT now());
 CREATE TABLE IF NOT EXISTS queue_events (id bigserial PRIMARY KEY, topic text NOT NULL, payload jsonb NOT NULL, created_at timestamptz DEFAULT now());
+ALTER TABLE queue_events ADD COLUMN IF NOT EXISTS processed_at timestamptz;
 CREATE TABLE IF NOT EXISTS roster_leagues (
   league_id text PRIMARY KEY, tenant_id text NOT NULL, sport_id text, window_open text NOT NULL, window_close text NOT NULL,
   max_squad_size int NOT NULL, required_positions jsonb NOT NULL, matches_in_progress jsonb NOT NULL);
