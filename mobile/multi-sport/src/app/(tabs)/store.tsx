@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { api } from '@/api/client';
 import type { Product } from '@/api/types';
 import { useApp } from '@/state/app';
@@ -48,6 +48,9 @@ function ProductCard({ p }: { p: Product }) {
 export default function Store() {
   const { cart } = useApp();
   const q = useCached<Product[]>('products', async () => (await api<{ products: Product[] }>('/api/v1/store/products')).products ?? []);
+  const reloadRef = useRef(q.reload);
+  reloadRef.current = q.reload;
+  useFocusEffect(useCallback(() => { reloadRef.current(); }, []));
   const count = cart.reduce((a, c) => a + c.quantity, 0);
   return (
     <Screen testID="screen-store" loading={q.loading && !q.data} onRefresh={q.reload}>

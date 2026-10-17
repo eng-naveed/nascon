@@ -12,6 +12,7 @@ export function Screen({
       <ScrollView
         contentContainerStyle={s.c}
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         refreshControl={onRefresh ? <RefreshControl refreshing={false} onRefresh={onRefresh} /> : undefined}
       >
         {loading ? (
@@ -40,7 +41,7 @@ export const T = {
 };
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
-  c: { padding: S.lg, gap: S.md, paddingBottom: 40 },
+  c: { padding: S.lg, gap: S.md, paddingBottom: 120 },
   load: { padding: 40, alignItems: 'center', gap: 8 },
   lt: { fontSize: 16, color: C.sub },
   h: { fontSize: 20, fontWeight: '800', color: C.text },

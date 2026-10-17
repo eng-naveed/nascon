@@ -58,7 +58,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const deviceId = useRef<string>('');
   const syncingRef = useRef(false);
 
-  const online = netOk && reachable;
+  // NetInfo can wrongly report "disconnected" (simulators, captive Wi-Fi), so server reachability decides.
+  const online = reachable;
   const onlineRef = useRef(online);
   onlineRef.current = online;
   const sessionRef = useRef(session);
@@ -103,14 +104,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // connectivity
   useEffect(() => {
     setNetworkHandler((ok) => setReachable(ok));
-    const unsub = NetInfo.addEventListener((st) => setNetOk(st.isConnected !== false));
+    const unsub = NetInfo.addEventListener((st) => {
+      setNetOk(st.isConnected !== false);
+      ping().then(setReachable);
+    });
     return () => unsub();
   }, []);
   useEffect(() => {
     let stop = false;
     const tick = async () => {
       if (stop) return;
-      if (netOk) setReachable(await ping());
+      setReachable(await ping());
     };
     tick();
     const t = setInterval(tick, 5000);
