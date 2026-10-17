@@ -63,12 +63,44 @@ export async function resetAndSeed(c: PoolClient, opts: ResetOpts = {}) {
   await c.query("INSERT INTO variants VALUES ('var-jersey-001-M','prod-jersey-001','Size M',450000,'PKR',$1,0), ('var-jersey-001-L','prod-jersey-001','Size L',450000,'PKR',$2,0)", [
     stock['var-jersey-001-M'], stock['var-jersey-001-L'],
   ]);
+  await seedMerch(c);
   const finalStock = { 'var-jersey-001-M': stock['var-jersey-001-M'], 'var-jersey-001-L': stock['var-jersey-001-L'] };
 
   await seedDemo(c);
   return {
     status: 'reset_complete', seed, sports: BASELINE_SPORTS.map((s) => s.sport_id), tenants: ['tenant-alpha', 'tenant-beta'], stock: finalStock,
   };
+}
+
+/** Extra catalogue so the store has more than one product. Ids sort after the baseline jersey. */
+async function seedMerch(c: PoolClient) {
+  const catalogue: { id: string; name: string; description: string; variants: [string, string, number, number][] }[] = [
+    {
+      id: 'prod-jersey-002', name: 'Alpha Lions Away Jersey', description: 'Official replica away jersey in breathable matchday fabric, 2026 season.',
+      variants: [['S', 'Size S', 450000, 8], ['M', 'Size M', 450000, 12], ['L', 'Size L', 450000, 10], ['XL', 'Size XL', 450000, 2]],
+    },
+    {
+      id: 'prod-merch-003', name: 'League Training Cap', description: 'Lightweight adjustable cap with embroidered league crest.',
+      variants: [['ONE', 'One size', 150000, 25]],
+    },
+    {
+      id: 'prod-merch-004', name: 'Matchday Water Bottle', description: 'Insulated 750 ml bottle. Keeps drinks cold through a full match.',
+      variants: [['500', '500 ml', 90000, 30], ['750', '750 ml', 120000, 3]],
+    },
+    {
+      id: 'prod-merch-005', name: 'Official Match Football', description: 'Size 5 thermo-bonded match ball used across the Alpha Premier League.',
+      variants: [['S5', 'Size 5', 380000, 14], ['S4', 'Size 4', 340000, 0]],
+    },
+    {
+      id: 'prod-merch-006', name: 'Supporter Scarf', description: 'Knitted two-colour scarf for the stands. Soft, warm and made to be waved.',
+      variants: [['STD', 'Standard', 110000, 40]],
+    },
+  ];
+  for (const p of catalogue) {
+    await c.query('INSERT INTO products VALUES ($1,$2,$3,$4)', [p.id, 'tenant-alpha', p.name, p.description]);
+    for (const [code, label, price, stock] of p.variants)
+      await c.query("INSERT INTO variants VALUES ($1,$2,$3,$4,'PKR',$5,0)", [`var-${p.id.slice(5)}-${code}`, p.id, label, price, stock]);
+  }
 }
 
 /** Demo data so the mobile app has real content (league, fixtures, completed matches, squads). */

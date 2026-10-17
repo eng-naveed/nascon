@@ -31,15 +31,17 @@ export function circleRounds(n: number): [number, number][][] {
   return rounds;
 }
 
-/** Balanced orientation of the complete graph: |home - away| <= 1 for every team per leg. */
+/**
+ * Balanced orientation of the complete graph: |home - away| <= 1 for every team per leg, and
+ * the first round reproduces the classic circle-method presentation (lower index at home in round 1).
+ */
 function homeFirst(i: number, j: number, n: number): boolean {
-  if (n % 2 === 1) {
-    const d = (((j - i) % n) + n) % n;
-    return d >= 1 && d <= (n - 1) / 2;
-  }
-  const d = (((j - i) % n) + n) % n;
-  if (d === n / 2) return i < j;
-  return d >= 1 && d < n / 2;
+  const mod = (x: number, m: number) => ((x % m) + m) % m;
+  if (n % 2 === 1) return mod(j - i, n) % 2 === 1;
+  if (i === 0) return j % 2 === 1;
+  if (j === 0) return i % 2 === 0;
+  const m = n - 1;
+  return mod(j - 1 - (i - 1), m) % 2 === 1;
 }
 
 export function generateRoundRobin(teams: string[], params: RRParams = {}) {
