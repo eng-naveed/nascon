@@ -19,7 +19,11 @@ export function Chips<T extends string>({
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(o.value)}
-            style={[s.chip, on ? { backgroundColor: primary, borderColor: primary } : { backgroundColor: C.card, borderColor: C.border }]}
+            style={({ pressed }) => [
+              s.chip,
+              on ? { backgroundColor: primary, borderColor: primary } : { backgroundColor: C.card2, borderColor: C.border },
+              pressed && { transform: [{ scale: 0.96 }] },
+            ]}
           >
             <Text style={[s.t, { color: on ? onColor(primary) : C.text }]}>{on ? '✓ ' : ''}{o.label}</Text>
           </Pressable>
@@ -30,6 +34,6 @@ export function Chips<T extends string>({
 }
 const s = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { minHeight: 48, minWidth: 48, paddingHorizontal: 14, borderRadius: 24, borderWidth: 1.5, justifyContent: 'center' },
-  t: { fontSize: 15, fontWeight: '600' },
+  chip: { minHeight: 48, minWidth: 48, paddingHorizontal: 16, borderRadius: 24, borderWidth: 1.5, justifyContent: 'center' },
+  t: { fontSize: 15, fontWeight: '700' },
 });
