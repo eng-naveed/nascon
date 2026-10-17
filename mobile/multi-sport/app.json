@@ -52,6 +52,23 @@
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "36b54684-eb1b-488c-9ba2-271ad88994d7"
+      }
+    },
+    "owner": "nascon",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/36b54684-eb1b-488c-9ba2-271ad88994d7"
     }
   }
 }
