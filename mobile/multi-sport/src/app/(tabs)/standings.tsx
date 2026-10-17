@@ -46,7 +46,7 @@ export default function StandingsScreen() {
         const nm = r.team_name ?? r.name ?? names.get(r.team_id) ?? r.team_id;
         const q = r.rank <= (st.data?.qualification_spots ?? 0);
         return (
-          <Card key={r.team_id} testID={`standing-${r.team_id}`} label={`Rank ${r.rank} ${nm}, ${r.points} points${q ? ', in a qualifying place' : ''}, ${r.status.replace('_', ' ')}. Opens club profile and matches.`} onPress={() => router.push({ pathname: '/club/[id]', params: { id: r.team_id, name: nm } })}>
+          <Card key={r.team_id} testID={`standing-${r.team_id}`} label={`Rank ${r.rank} ${nm}, ${r.points} ${r.points === 1 ? 'point' : 'points'}${q ? ', in a qualifying place' : ''}, ${r.status.replace('_', ' ')}. Opens club profile and matches.`} onPress={() => router.push({ pathname: '/club/[id]', params: { id: r.team_id, name: nm } })}>
             <View style={s.head}>
               <View style={{ alignItems: 'center', gap: 2 }}>
                 <View style={[s.rankBox, q && { backgroundColor: C.accent, borderColor: C.accent }]}>

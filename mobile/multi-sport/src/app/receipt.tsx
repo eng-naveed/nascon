@@ -8,11 +8,12 @@ import { router } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useApp } from '@/state/app';
-import { Screen, H, T } from '@/components/Screen';
+import { Screen } from '@/components/Screen';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorBanner } from '@/components/ErrorBanner';
+import { productIcon } from '@/components/ProductHero';
 import { money, C, F } from '@/theme';
 
 export default function ReceiptScreen() {
@@ -56,31 +57,78 @@ export default function ReceiptScreen() {
     }
     setBusy(false);
   };
+  const itemCount = p.items.reduce((n, i) => n + i.quantity, 0);
+  const paidAt = p.paid_at ? new Date(p.paid_at) : null;
+  const paidLabel = paidAt && !isNaN(paidAt.getTime())
+    ? paidAt.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : null;
+  const label = (t: string) => <Text style={{ fontSize: 12, fontWeight: '800', color: C.sub, letterSpacing: 1, textTransform: 'uppercase' }}>{t}</Text>;
+  const dashed = (
+    <View style={{ marginHorizontal: -18, height: 28, justifyContent: 'center' }}>
+      <View style={{ marginHorizontal: 14, height: 1, overflow: 'hidden' }}>
+        <View style={{ height: 2, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.border }} />
+      </View>
+      <View style={{ position: 'absolute', left: -11, width: 22, height: 22, borderRadius: 11, backgroundColor: C.bg }} />
+      <View style={{ position: 'absolute', right: -11, width: 22, height: 22, borderRadius: 11, backgroundColor: C.bg }} />
+    </View>
+  );
+  const line = (k: string, v: string, color: string = C.sub) => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <Text style={{ fontSize: 15, color: C.sub }}>{k}</Text>
+      <Text style={{ fontSize: 15, fontWeight: '700', color }}>{v}</Text>
+    </View>
+  );
   return (
     <Screen testID="screen-receipt">
-      <View testID="banner-ok" accessible accessibilityRole="alert" accessibilityLabel={`Payment successful. Thank you! You paid ${money(p.total_minor, p.currency)}.`} style={{ alignItems: 'center', gap: 6, paddingVertical: 20, paddingHorizontal: 16, borderRadius: 20, backgroundColor: C.okBg, borderWidth: 1.5, borderColor: C.ok }}>
-        <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="checkmark" size={46} color={C.bg} />
+      <View testID="banner-ok" accessible accessibilityRole="alert" accessibilityLabel={`Payment successful. Thank you! You paid ${money(p.total_minor, p.currency)}.`} style={{ alignItems: 'center', gap: 4, paddingVertical: 22, paddingHorizontal: 16, borderRadius: 22, backgroundColor: C.okBg, borderWidth: 1.5, borderColor: C.ok }}>
+        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: C.ok, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+          <Ionicons name="checkmark" size={40} color={C.bg} />
         </View>
-        <Text style={{ fontSize: 30, fontFamily: F.displayHeavy, color: C.text, letterSpacing: 0.6, textTransform: 'uppercase', textAlign: 'center' }}>Payment successful</Text>
+        <Text style={{ fontSize: 14, color: C.ok, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' }}>Payment successful</Text>
+        <Text style={{ fontSize: 52, fontFamily: F.displayHeavy, color: C.accent, textAlign: 'center', lineHeight: 58 }} adjustsFontSizeToFit numberOfLines={1}>{money(p.total_minor, p.currency)}</Text>
         <Text style={{ fontSize: 15, color: C.sub, textAlign: 'center' }}>Thank you! Your order is confirmed.</Text>
-        <Text style={{ fontSize: 40, fontFamily: F.displayHeavy, color: C.accent, textAlign: 'center' }} adjustsFontSizeToFit numberOfLines={1}>{money(p.total_minor, p.currency)}</Text>
-        <Text style={{ fontSize: 13, color: C.sub, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>Total paid</Text>
       </View>
-      <H>Receipt</H>
-      <Card testID="receipt-card">
-        <Text style={T.sub}>Order</Text>
-        <Text style={{ color: C.text, fontSize: 16, fontWeight: '800' }} testID="receipt-order-id" selectable>{p.order_id}</Text>
-        {p.paid_at ? <Text style={T.sub}>Paid: {new Date(p.paid_at).toLocaleString()}</Text> : null}
-        {p.items.map((i) => (
-          <View key={i.variant_id} testID={`receipt-item-${i.variant_id}`} style={{ flexDirection: 'row', gap: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: C.border }}>
-            <Text style={[T.body, { flex: 1, fontWeight: '700' }]}>{i.quantity} × {receipt.item_names?.[i.variant_id] ?? names[i.variant_id] ?? i.variant_id}</Text>
-            <Text style={T.body}>{money(i.unit_price_minor * i.quantity, p.currency)}</Text>
+      <Card testID="receipt-card" style={{ padding: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Ionicons name="receipt" size={20} color={C.accent} />
+          <Text style={{ fontSize: 22, fontFamily: F.displayHeavy, color: C.text, letterSpacing: 0.6, textTransform: 'uppercase', flex: 1 }}>Receipt</Text>
+          <Text style={{ fontSize: 13, color: C.sub, fontWeight: '700' }}>{itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
+        </View>
+        <View style={{ gap: 2 }}>
+          {label('Order')}
+          <Text style={{ color: C.text, fontSize: 15, fontWeight: '700' }} testID="receipt-order-id" selectable>{p.order_id}</Text>
+          {paidLabel ? <Text style={{ fontSize: 14, color: C.sub, marginTop: 2 }}>{paidLabel}</Text> : null}
+        </View>
+        {dashed}
+        <View style={{ gap: 16 }}>
+          {p.items.map((i) => {
+            const full = receipt.item_names?.[i.variant_id] ?? names[i.variant_id] ?? i.variant_id;
+            const m = /^(.*) \((.*)\)$/.exec(full);
+            return (
+              <View key={i.variant_id} testID={`receipt-item-${i.variant_id}`} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: C.card2, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={productIcon(m ? m[1] : full)} size={22} color={C.accent} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ color: C.text, fontSize: 16, fontWeight: '800' }}>{m ? m[1] : full}</Text>
+                  <Text style={{ color: C.sub, fontSize: 14 }}>{m ? `${m[2]} · ` : ''}{i.quantity} × {money(i.unit_price_minor, p.currency)}</Text>
+                </View>
+                <Text style={{ color: C.text, fontSize: 16, fontWeight: '800' }}>{money(i.unit_price_minor * i.quantity, p.currency)}</Text>
+              </View>
+            );
+          })}
+        </View>
+        {dashed}
+        {p.discount_minor > 0 ? (
+          <View style={{ gap: 6 }}>
+            {line('Subtotal', money(p.subtotal_minor, p.currency))}
+            {line('Discount', `-${money(p.discount_minor, p.currency)}`, C.ok)}
           </View>
-        ))}
-        <Text style={T.sub}>Subtotal: {money(p.subtotal_minor, p.currency)}</Text>
-        {p.discount_minor > 0 ? <Text style={T.sub}>Discount: -{money(p.discount_minor, p.currency)}</Text> : null}
-        <Text style={{ color: C.text, fontSize: 22, fontWeight: '800' }} testID="receipt-total">Total: {money(p.total_minor, p.currency)}</Text>
+        ) : null}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: p.discount_minor > 0 ? 12 : 0 }}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: C.text, textTransform: 'uppercase', letterSpacing: 0.8 }}>Total</Text>
+          <Text style={{ fontSize: 30, fontFamily: F.displayHeavy, color: C.text }} testID="receipt-total">{money(p.total_minor, p.currency)}</Text>
+        </View>
       </Card>
       {msg ? <ErrorBanner kind={msg.k} message={msg.t} /> : null}
       <Button label="Download / share PDF" icon="download" testID="receipt-download" onPress={download} loading={busy} />
