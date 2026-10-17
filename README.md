@@ -15,6 +15,12 @@ curl localhost:8080/health      # {"status":"ok"} once Postgres is up and baseli
 * `POST /audit/v1/reset` wipes and re-seeds the baseline (tenants, sports, store, RBAC scenario, demo accounts, demo league).
 * Only Docker is required on the host. Services: `db` (postgres:16-alpine) and `api` (Node 20).
 
+## Operations endpoints
+
+* `GET /metrics` - Prometheus text format: `http_requests_total{method,route,status}`, request duration sum/count, `process_uptime_seconds`, `queue_pending_events`, `jobs_processed_total{topic}`.
+* Internal job queue: every domain event (e.g. an order status change) is written to `queue_events` and consumed by an in-process worker once per second (`SKIP LOCKED` claim, marked `processed_at`). `GET /api/v1/admin/queue` (super-admin) shows it.
+* Order lifecycle (FR-2.3): `GET /api/v1/orders/{id}`, `POST /api/v1/orders/{id}/status` with `Pending > Paid > Packed > Shipped > Delivered` (plus `Cancelled`, `Refunded`); illegal moves return `409 ILLEGAL_TRANSITION` with the allowed next states.
+
 ## Demo accounts (section 8.3, re-created on every start and `/reset`)
 
 | Role | Email | Password |

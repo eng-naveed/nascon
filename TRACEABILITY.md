@@ -22,3 +22,4 @@ Paths are relative to the repo root. "Unit" = `backend/tests/*.test.ts` (vitest)
 | NFR-7 | One-command reproducible start, baseline seed, repeatable `/reset` | `docker-compose.yml`, `backend/Dockerfile`, `backend/src/core/seed.ts` | Smoke "health", "reset", "reset2" |
 | §5.14 | Offline sync endpoint (ordering, rebase, duplicates, INVALID_BASE_VERSION) | `backend/src/features/offline/service.ts` | Smoke "sync", "sync replay" |
 | §8 | Mobile screens, roles, sync indicator, HCI | `mobile/multi-sport/src/app`, `src/components`, `src/features` | Manual desk check |
+| FR-2.3 | Order states Pending..Refunded, each transition emits a domain event to the internal queue; queue consumer; ops metrics | `backend/src/features/orders/service.ts`, `backend/src/core/metrics.ts`, `backend/src/index.ts` (worker) | API `backend/tests/api/extras.test.ts` |
