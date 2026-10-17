@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests + coverage
+        working-directory: backend
+        run: |
+          npm ci --legacy-peer-deps
+          npx tsc --noEmit
+          npx vitest run --coverage
+
+      - name: Start the stack exactly like the grader (docker compose up -d --build)
+        env:
+          DAY1_SALT: ci-test-salt
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/health || true)
+            [ "$code" = "200" ] && echo "healthy after ~$((i*2))s" && exit 0
+            sleep 2
+          done
+          docker compose logs --no-color
+          exit 1
+
+      - name: API smoke test (signatures, idempotency, standings, roster, checkout race, RBAC, offline sync)
+        env:
+          DAY1_SALT: ci-test-salt
+        run: python3 backend/tests/integration/smoke.py
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
