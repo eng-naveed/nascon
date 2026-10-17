@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Text } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { api, friendly } from '@/api/client';
@@ -33,6 +33,15 @@ export default function Scoring() {
   const [variant, setVariant] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ k: 'ok' | 'bad' | 'warn'; t: string } | null>(null);
+  // Optimistic status after an action was sent or queued (so a pending offline "Start" cannot be queued twice).
+  const [local, setLocal] = useState<string | null>(null);
+  useEffect(() => {
+    setLocal(null);
+  }, [m?.status]);
+  const status = local ?? m?.status ?? 'upcoming';
+  const canStart = status === 'upcoming';
+  const canEnd = status === 'in_progress';
+  const canScore = status === 'in_progress';
   const names: Record<string, string> = {};
   if (m) {
     names[m.home.team_id] = String(home ?? m.home.team_id);
@@ -47,6 +56,8 @@ export default function Scoring() {
       try {
         const body = { event_id: uid('evt-'), match_id: mid, type, payload };
         const res = await submitAction('score_event', body, m.version, summary);
+        if (type === 'match_start') setLocal('in_progress');
+        if (type === 'match_end') setLocal('completed');
         setMsg(res === 'queued' ? { k: 'warn', t: 'Saved as pending. It will be sent when you are back online.' } : { k: 'ok', t: 'Done. The event was recorded.' });
         if (res === 'sent') mq.reload();
       } catch (e) {
@@ -85,12 +96,38 @@ export default function Scoring() {
           </Card>
           {msg ? <ErrorBanner kind={msg.k} message={msg.t} /> : null}
           <H>Match state</H>
-          <Button label="Start match" icon="play" testID="score-start" disabled={busy} onPress={() => send('match_start', {}, 'Start match', false)} />
-          <Button label="End match" icon="stop" variant="danger" testID="score-end" disabled={busy} onPress={() => send('match_end', {}, 'End this match', true)} />
+          <Button
+            label={canStart ? 'Start match' : status === 'in_progress' ? 'Match is live' : 'Match finished'}
+            icon={canStart ? 'play' : 'checkmark-circle'}
+            variant={canStart ? 'primary' : 'secondary'}
+            testID="score-start"
+            disabled={busy || !canStart}
+            onPress={() => send('match_start', {}, 'Start match', false)}
+          />
+          <Button
+            label={canEnd ? 'End match' : status === 'completed' ? 'Match ended' : 'Start the match first'}
+            icon={canEnd ? 'stop' : 'lock-closed'}
+            variant={canEnd ? 'danger' : 'secondary'}
+            testID="score-end"
+            disabled={busy || !canEnd}
+            onPress={() => send('match_end', {}, 'End this match', true)}
+          />
           <H>Score event</H>
-          <Chips testIDPrefix="score-team" value={team} onChange={setTeam} options={teamOpts} />
-          {evTypes.length === 0 ? <Field label="Event type" testID="score-event-type-input" value={evType ?? ''} onChangeText={setEvType} /> : <Chips testIDPrefix="score-type" value={evType} onChange={setEvType} options={evTypes.map((e) => ({ value: e, label: e.replace(/_/g, ' ') }))} />}
-          <Button label="Add score event" icon="add-circle" testID="score-submit" disabled={busy || !team || !evType} onPress={() => send('score', { team_id: team, event_type: evType }, `Score: ${names[team!] ?? team} ${String(evType).replace(/_/g, ' ')}`, false)} />
+          {canScore ? (
+            <>
+              <Chips testIDPrefix="score-team" value={team} onChange={setTeam} options={teamOpts} />
+              {evTypes.length === 0 ? <Field label="Event type" testID="score-event-type-input" value={evType ?? ''} onChangeText={setEvType} /> : <Chips testIDPrefix="score-type" value={evType} onChange={setEvType} options={evTypes.map((e) => ({ value: e, label: e.replace(/_/g, ' ') }))} />}
+              <Button label="Add score event" icon="add-circle" testID="score-submit" disabled={busy || !team || !evType} onPress={() => send('score', { team_id: team, event_type: evType }, `Score: ${names[team!] ?? team} ${String(evType).replace(/_/g, ' ')}`, false)} />
+              <H>Fair-play penalty</H>
+              <Text style={T.sub}>Pick a team above, then record a penalty. It counts in the fair-play tie-break.</Text>
+              <Button label="Caution (-1)" icon="warning" variant="secondary" testID="discipline-caution" disabled={busy || !team} onPress={() => send('discipline', { team_id: team, points: -1 }, `Penalty -1 for ${names[team!] ?? team}`, true)} />
+              <Button label="Serious offence (-3)" icon="alert-circle" variant="danger" testID="discipline-serious" disabled={busy || !team} onPress={() => send('discipline', { team_id: team, points: -3 }, `Penalty -3 for ${names[team!] ?? team}`, true)} />
+            </>
+          ) : (
+            <Text style={T.sub} testID="score-locked-hint">
+              {status === 'upcoming' ? 'Start the match to add score events.' : 'This match has ended, so new score events cannot be added. You can still undo an earlier event below.'}
+            </Text>
+          )}
           <H>Undo an event (compensate)</H>
           {activeEvents.length === 0 ? <Text style={T.sub}>No events can be undone yet.</Text> : <Chips testIDPrefix="comp-target" value={target} onChange={setTarget} options={activeEvents.map((e) => ({ value: e.event_id, label: `#${e.sequence} ${describeEvent(e, names)}` }))} />}
           <Field label="Reason" testID="comp-reason" value={reason} onChangeText={setReason} autoCapitalize="sentences" />
