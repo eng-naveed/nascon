@@ -23,3 +23,24 @@ Paths are relative to the repo root. "Unit" = `backend/tests/*.test.ts` (vitest)
 | §5.14 | Offline sync endpoint (ordering, rebase, duplicates, INVALID_BASE_VERSION) | `backend/src/features/offline/service.ts` | Smoke "sync", "sync replay" |
 | §8 | Mobile screens, roles, sync indicator, HCI | `mobile/multi-sport/src/app`, `src/components`, `src/features` | Manual desk check |
 | FR-2.3 | Order states Pending..Refunded, each transition emits a domain event to the internal queue; queue consumer; ops metrics | `backend/src/features/orders/service.ts`, `backend/src/core/metrics.ts`, `backend/src/index.ts` (worker) | API `backend/tests/api/extras.test.ts` |
+
+## Day 2 (Part II)
+
+Backend modules live under `backend/src/features/day2/`; API tests under `backend/tests/api/day2-*.test.ts`; QA suites under `tests/`.
+
+| ID | Requirement | Source | Tests |
+|---|---|---|---|
+| FR-3.1 | Public athlete identity (player pages, QR-linked profiles) | `backend/src/features/day2/web/pages.ts` (`/web/players/:id`), `qr_guest/qr.ts`; mobile `src/app/entity/[id].tsx` | API `day2-web.test.ts`, `day2-qr-guest.test.ts`. Follow graph (`/api/v1/players/:id/follow`) not implemented |
+| FR-3.2 | Solo streaming: stream keys generate / rotate / revoke, MediaMTX HTTP auth, kick on revoke, dynamic overlay via score WS | `day2/streaming/service.ts`, `streaming/media.ts`, `infra/mediamtx/mediamtx.yml`; mobile `src/app/golive.tsx` | API `day2-streaming.test.ts`; CI HLS + RTMP probes (`.github/workflows/autograde.yml`) |
+| FR-3.3 | 4-way co-streaming, layouts, host handoff, invites, host controls | `day2/costream/service.ts`, `costream/live.ts`; mobile `src/app/stream/[id].tsx` | API `day2-streaming.test.ts`, `day2-realtime.test.ts`; Selenium co-stream chat; Appium cross-surface chat |
+| FR-4.1 | Dynamic QR deep links, `/q/{code}` 302, scan telemetry, SVG / PNG / PDF export | `day2/qr_guest/qr.ts`, `qr_guest/render.ts`; mobile `src/app/scan.tsx` | API `day2-qr-guest.test.ts`; Selenium Test 1; Appium deep links |
+| FR-4.2 | Zero-account guest experience (guest session, guest web player) | `day2/qr_guest/guest.ts`, `day2/web/pages.ts`, `web/client.ts` | API `day2-web.test.ts`; Selenium Tests 1 and 3 |
+| FR-4.3 | Server-enforced read-only boundary (403 GUEST_WRITE_FORBIDDEN before parsing) | `backend/src/app.ts` (guest guard), `day2/qr_guest/guest.ts` | API `day2-foundations.test.ts`; Selenium Test 2 |
+| FR-4.4 | Progressive registration and atomic cart merge (reserve once, replay, 409 merged) | `day2/qr_guest/cart.ts`, `web/client.ts` (modal, resume) | API `day2-qr-guest.test.ts` |
+| FR-5.2 | Notification bus, bounded retries, per-room DLQ, ntfy push | `day2/observability/bus.ts`, `observability/hub.ts`, `observability/ntfy.ts`, `day2/moderation/service.ts` | API `day2-moderation.test.ts`, `day2-realtime.test.ts` |
+| FR-5.3 | Chat moderation: leetspeak normaliser, flood / rate limit, kick / mute | `day2/moderation/normalize.ts`, `moderation/service.ts`, `moderation/chat.ts` | API `day2-moderation.test.ts`, `day2-chat.test.ts` |
+| NFR-1 | WebSocket broadcast latency | `day2/observability/hub.ts`, `observability/realtime.ts` | API `day2-realtime.test.ts`; Selenium Test 3 (banner within 0.5 s) |
+| NFR-2 | Scale: 500 guest + 50 chat VUs, zero failures, p95 < 800 ms | DB-free QR cache in `qr_guest/qr.ts`, in-memory DLQ snapshot | k6 `tests/k6_load.js` -> `tests/reports/k6-summary.json` |
+| NFR-6 | Observability: `/metrics` (text/plain; version=0.0.4), health checks | `backend/src/core/metrics.ts`, `core/health.ts` | API `day2-foundations.test.ts` |
+| NFR-8 | Accessibility (keyboard, ARIA, 48 px targets, modal focus) | `day2/web/pages.ts`, `web/styles.ts` | Selenium a11y contract test |
+| NFR-9 | Data minimisation, `DELETE /audit/v1/privacy/user/{id}`, no IP / UA stored | `day2/qr_guest/privacy.ts`, `qr_guest/qr.ts` | API `day2-qr-guest.test.ts` |
