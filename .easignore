@@ -1,6 +1,30 @@
+# .easignore replaces .gitignore for EAS uploads, so mirror it here
+.git
+node_modules/
+.expo/
+dist/
+web-build/
+.DS_Store
+.env*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# generated native folders (CNG: EAS runs prebuild)
+mobile/multi-sport/android/
+mobile/multi-sport/ios/
+
+# local build output
 mobile/release/
-mobile/android/build/
-mobile/android/app/build/
-mobile/android/.gradle/
-mobile/ios/build/
-mobile/ios/Pods/
+
+# unrelated to the mobile build
+backend/
+tests/
+infra/
+tools/
+plan/
+*.pdf
