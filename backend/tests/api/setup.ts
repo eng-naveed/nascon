@@ -11,8 +11,10 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 
 const ADMIN_URL = process.env.TEST_PG_URL ?? 'postgres://t:t@localhost:55432/t';
 process.env.DAY1_SALT = 'test-salt';
+process.env.DAY2_SALT = 'test-salt-d2';
 
 export const SALT = 'test-salt';
+export const SALT2 = 'test-salt-d2';
 export const PASSWORD = 'Nascon@26';
 
 export interface Ctx {

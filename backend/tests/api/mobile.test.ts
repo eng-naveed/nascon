@@ -54,10 +54,10 @@ describe('authenticated /api/v1 routes', () => {
     const s = await get('viewer', '/api/v1/sports');
     expect(s.body.sports.map((x: any) => x.sport_id).sort()).toEqual(['basketball', 'cricket', 'esports', 'football']);
     const f = await get('viewer', '/api/v1/fixtures');
-    expect(f.body.fixtures).toHaveLength(6);
+    expect(f.body.fixtures).toHaveLength(7);
     expect(f.body.fixtures[0]).toMatchObject({ match_id: 'demo-m1', home_name: 'Alpha Lions', away_name: 'Alpha Falcons', status: 'completed', home_score: 2, away_score: 1, version: 5 });
     const byLeague = await get('admin', '/api/v1/fixtures?league_id=league-alpha-1');
-    expect(byLeague.body.fixtures).toHaveLength(6);
+    expect(byLeague.body.fixtures).toHaveLength(7);
     const none = await get('organizer', '/api/v1/fixtures?league_id=nope');
     expect(none.body.fixtures).toEqual([]);
     const clubs = await get('viewer', '/api/v1/clubs');
