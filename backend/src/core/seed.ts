@@ -8,6 +8,8 @@ import { setupRoster } from '../features/roster/service';
 const TABLES = [
   'kv', 'tenants', 'users', 'rbac_entities', 'clubs', 'sports', 'leagues', 'matches', 'events', 'products', 'variants', 'orders',
   'queue_events', 'roster_leagues', 'roster_squads', 'roster_players', 'roster_regs', 'roster_audit', 'roster_requests', 'sync_actions',
+  // Phase II
+  'stream_keys', 'costream_sessions', 'chat_rooms', 'chat_messages', 'qr_codes', 'qr_scan_stats', 'guest_tokens', 'carts', 'moderation_state', 'dlq_events', 'erased_users',
 ];
 
 let pwHash: string | null = null;
@@ -38,7 +40,7 @@ export async function resetAndSeed(c: PoolClient, opts: ResetOpts = {}) {
     ['league', 'league-alpha-1', 'tenant-alpha', null], ['league', 'league-alpha-2', 'tenant-alpha', null], ['league', 'league-beta-1', 'tenant-beta', null],
     ['club', 'club-alpha-1', 'tenant-alpha', null], ['club', 'club-alpha-2', 'tenant-alpha', null], ['club', 'club-beta-1', 'tenant-beta', null],
     ['club', 'club-alpha-3', 'tenant-alpha', null], ['club', 'club-alpha-4', 'tenant-alpha', null],
-    ['player', 'player-alpha-1', 'tenant-alpha', 'club-alpha-1'], ['player', 'player-alpha-2', 'tenant-alpha', 'club-alpha-2'], ['player', 'player-beta-1', 'tenant-beta', 'club-beta-1'],
+    ['player', 'player-alpha-1', 'tenant-alpha', 'club-alpha-1'], ['player', 'player-alpha-2', 'tenant-alpha', 'club-alpha-2'], ['player', 'player-beta-1', 'tenant-beta', 'club-beta-1'], ['player', 'player-beta-2', 'tenant-beta', 'club-beta-1'],
   ];
   for (const e of ent) await c.query('INSERT INTO rbac_entities VALUES ($1,$2,$3,$4)', e);
 
@@ -67,6 +69,7 @@ export async function resetAndSeed(c: PoolClient, opts: ResetOpts = {}) {
   const finalStock = { 'var-jersey-001-M': stock['var-jersey-001-M'], 'var-jersey-001-L': stock['var-jersey-001-L'] };
 
   await seedDemo(c);
+  await seedPhase2(c);
   return {
     status: 'reset_complete', seed, sports: BASELINE_SPORTS.map((s) => s.sport_id), tenants: ['tenant-alpha', 'tenant-beta'], stock: finalStock,
   };
@@ -141,4 +144,23 @@ async function seedDemo(c: PoolClient) {
     ],
     players,
   });
+}
+
+/** Phase II baseline: live match-m1 (1 - 0), default QR mappings, a valid read-only guest token and an empty cart. */
+async function seedPhase2(c: PoolClient) {
+  let n = 0;
+  const ev = async (type: string, payload: any = {}) =>
+    appendEvent(c, { event_id: `seed-m1-e${++n}`, match_id: 'match-m1', type, payload });
+  await ev('match_init', { sport_id: 'football', home_team_id: 'club-alpha-1', away_team_id: 'club-alpha-2', league_id: 'league-alpha-1' });
+  await ev('match_start');
+  await ev('score', { team_id: 'club-alpha-1', event_type: 'goal' });
+
+  const qr: [string, string, string][] = [
+    ['match-m1', 'match', 'm1-live'],
+    ['player-alpha-1', 'player', 'p-alpha-1'],
+    ['club-alpha-1', 'club', 'c-alpha-1'],
+  ];
+  for (const [id, type, code] of qr) await c.query('INSERT INTO qr_codes(entity_id, entity_type, short_code, scan_count) VALUES ($1,$2,$3,0)', [id, type, code]);
+  await c.query("INSERT INTO guest_tokens(guest_token, status) VALUES ('guest_anon_tok_7721', 'active')");
+  // player-alpha-1's persistent cart starts empty: no rows in `carts`.
 }

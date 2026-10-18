@@ -16,6 +16,8 @@ import { authenticate, mintToken, probe, rbacMatrix } from './features/rbac/serv
 import { offlineSync } from './features/offline/service';
 import { getOrder, listQueue, transitionOrder } from './features/orders/service';
 import { inc, renderMetrics } from './core/metrics';
+import { runHealth } from './core/health';
+import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT } from './features/day2/common';
 
 const hits = new Map<string, number[]>();
 function rateLimit(ip: string) {
@@ -87,6 +89,15 @@ export function buildApp(): FastifyInstance {
     inc('http_request_duration_seconds_count', { route });
   });
 
+  // Phase II zero-trust boundary: an anonymous guest token can never perform a write, whatever the route.
+  // Runs before body parsing and validation, so it answers 403 even for empty or malformed bodies.
+  app.addHook('onRequest', async (req) => {
+    const m = GUEST_TOKEN_RE.exec(req.headers.authorization ?? '');
+    if (!m || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
+    if (GUEST_WRITE_EXEMPT.has(req.url.split('?')[0])) return;
+    throw new AppError(403, 'GUEST_WRITE_FORBIDDEN', 'Anonymous guest tokens cannot perform write mutations.', { guest_token: m[1] });
+  });
+
   app.addHook('onRequest', async (req) => {
     if (/%00/i.test(req.url)) throw new AppError(400, 'VALIDATION_ERROR', 'Request contains unsupported characters.', { fields: [] });
     if (req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/v1/auth/')) rateLimit(req.ip);
@@ -98,12 +109,13 @@ export function buildApp(): FastifyInstance {
 
   // ---- health ----
   app.get('/health', async (_req, reply) => {
-    try {
-      const r = await pool.query('SELECT count(*)::int AS n FROM tenants');
-      if (r.rows[0].n > 0) return { status: 'ok' };
-    } catch {
-      /* fallthrough */
-    }
+    const h = await runHealth({
+      db: async () => (await pool.query('SELECT count(*)::int AS n FROM tenants')).rows[0].n > 0,
+      redisUrl: config.redisUrl,
+      mediaApiUrl: config.mediaApiUrl,
+    });
+    if (h.ok) return { status: 'ok' };
+    reply.header('x-health-checks', JSON.stringify(h.checks));
     return reply.status(503).send({ status: 'unavailable' });
   });
 

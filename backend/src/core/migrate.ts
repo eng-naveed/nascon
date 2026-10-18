@@ -36,7 +36,38 @@ CREATE TABLE IF NOT EXISTS roster_audit (
   effective_date text, who text, "when" text, state text, why text);
 CREATE TABLE IF NOT EXISTS roster_requests (request_id text PRIMARY KEY, body_hash text NOT NULL, response jsonb NOT NULL);
 CREATE TABLE IF NOT EXISTS sync_actions (device_id text NOT NULL, action_id text NOT NULL, result jsonb NOT NULL, PRIMARY KEY (device_id, action_id));
+-- ===== Phase II (Day 2) =====
+CREATE TABLE IF NOT EXISTS stream_keys (
+  stream_key text PRIMARY KEY, player_id text NOT NULL, label text NOT NULL DEFAULT 'default', status text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), revoked_at timestamptz);
+CREATE INDEX IF NOT EXISTS stream_keys_player_idx ON stream_keys(player_id, status);
+CREATE TABLE IF NOT EXISTS costream_sessions (
+  session_id text PRIMARY KEY, host_player_id text NOT NULL, participants jsonb NOT NULL, layout text NOT NULL, status text NOT NULL,
+  active_host text, handoff_occurred boolean NOT NULL DEFAULT false, participant_count int NOT NULL, active_participants jsonb NOT NULL,
+  request_hash text NOT NULL, response jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS chat_rooms (chat_room_id text PRIMARY KEY, last_seq bigint NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id bigserial PRIMARY KEY, chat_room_id text NOT NULL, seq bigint NOT NULL, message_id text NOT NULL, sender text NOT NULL, text text NOT NULL,
+  flagged boolean NOT NULL DEFAULT false, reason text, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (chat_room_id, seq), UNIQUE (chat_room_id, message_id));
+CREATE TABLE IF NOT EXISTS qr_codes (
+  entity_id text PRIMARY KEY, entity_type text NOT NULL, short_code text UNIQUE NOT NULL, scan_count bigint NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS qr_scan_stats (
+  entity_id text NOT NULL, device_family text NOT NULL, bucket_utc timestamptz NOT NULL, n bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (entity_id, device_family, bucket_utc));
+CREATE TABLE IF NOT EXISTS guest_tokens (
+  guest_token text PRIMARY KEY, status text NOT NULL DEFAULT 'active', merged_user_id text, payload_hash text, merged_response jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz);
+CREATE TABLE IF NOT EXISTS carts (user_id text NOT NULL, variant_id text NOT NULL, quantity int NOT NULL CHECK (quantity > 0), PRIMARY KEY (user_id, variant_id));
+CREATE TABLE IF NOT EXISTS moderation_state (
+  chat_room_id text NOT NULL, user_id text NOT NULL, kind text NOT NULL, seq bigserial, PRIMARY KEY (chat_room_id, user_id, kind));
+CREATE TABLE IF NOT EXISTS dlq_events (
+  id bigserial PRIMARY KEY, chat_room_id text NOT NULL, event_id text NOT NULL, attempts int NOT NULL, status text NOT NULL DEFAULT 'dead',
+  reason text, created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS erased_users (user_id text PRIMARY KEY, erased_at timestamptz NOT NULL DEFAULT now());
 `;
+
 
 export async function migrate() {
   const c = await pool.connect();
