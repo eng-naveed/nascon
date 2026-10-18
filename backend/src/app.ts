@@ -25,6 +25,9 @@ import { clearQrCache, getQr, qrEntry, render, resolveShortCode, scanStats } fro
 import { qrPdf, qrPng, qrSvg } from './features/day2/qr_guest/render';
 import { mediaAuth, streamKey } from './features/day2/streaming/service';
 import { costreamSession } from './features/day2/costream/service';
+import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
+import { realtime } from './features/day2/observability/realtime';
+import websocket from '@fastify/websocket';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
@@ -110,12 +113,17 @@ export function buildApp(): FastifyInstance {
     if (req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/v1/auth/')) rateLimit(req.ip);
   });
 
-  const auth = (req: FastifyRequest) => {
-    const u = authenticate(req.headers.authorization);
+  const authHeader = (header: string | undefined) => {
+    const u = authenticate(header);
     // tokens of an erased account stop working immediately (NFR-9)
     if (isErased(u.sub) || (u.player_id && isErased(u.player_id))) throw unauthenticated();
     return u;
   };
+  const auth = (req: FastifyRequest) => authHeader(req.headers.authorization);
+
+  // ---- realtime: WebSocket + SSE fan-out (Phase II observability) ----
+  app.register(websocket, { options: { maxPayload: 64 * 1024 } });
+  app.register(realtime, { authenticate: authHeader, onBroadcaster });
   const q = (req: FastifyRequest) => (req.query ?? {}) as Record<string, string>;
   const send = (reply: FastifyReply, r: { status: number; body: unknown }) => reply.status(r.status).send(r.body);
 
@@ -245,6 +253,10 @@ export function buildApp(): FastifyInstance {
   // ---- mobile / production routes (/api/v1) ----
   const V = '/api/v1';
   app.post(`${V}/guest/session`, async (_req, reply) => reply.status(201).send(await issueGuestSession()));
+  // ---- co-stream live controls (FR-3.3) ----
+  app.post(`${V}/costream/:id/invites`, async (req, reply) => reply.status(201).send(await invite(auth(req), (req.params as any).id, req.body)));
+  app.post(`${V}/costream/:id/join`, async (req) => join(auth(req), (req.params as any).id, req.body));
+  app.post(`${V}/costream/:id/control`, async (req) => control(auth(req), (req.params as any).id, req.body));
   app.get(`${V}/qr/:id/stats`, async (req) => {
     auth(req);
     return scanStats((req.params as any).id);

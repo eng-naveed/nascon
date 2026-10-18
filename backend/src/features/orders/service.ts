@@ -1,6 +1,7 @@
 import { pool } from '../../core/db';
 import { conflict, notFound, validation } from '../../core/errors';
 import { inc } from '../../core/metrics';
+import { publish } from '../day2/observability/bus';
 
 /** FR-2.3 order lifecycle. Every transition emits a structured domain event to the internal queue. */
 export const ORDER_STATES = ['Pending', 'Paid', 'Packed', 'Shipped', 'Delivered', 'Cancelled', 'Refunded'] as const;
@@ -49,10 +50,15 @@ export async function processQueueOnce(limit = 100): Promise<number> {
   const r = await pool.query(
     `UPDATE queue_events SET processed_at = now()
       WHERE id IN (SELECT id FROM queue_events WHERE processed_at IS NULL ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED)
-      RETURNING topic`,
+      RETURNING topic, payload`,
     [limit],
   );
-  for (const row of r.rows) inc('jobs_processed_total', { topic: row.topic });
+  for (const row of r.rows) {
+    inc('jobs_processed_total', { topic: row.topic });
+    // order status transitions reach live subscribers (FR-5.2) once the job is consumed
+    if (row.topic === 'order.status_changed' && row.payload?.order_id)
+      publish(`order:${row.payload.order_id}`, { type: 'order.status', ...row.payload });
+  }
   return r.rowCount ?? 0;
 }
 

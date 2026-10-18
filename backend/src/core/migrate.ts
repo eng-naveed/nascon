@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS costream_sessions (
   session_id text PRIMARY KEY, host_player_id text NOT NULL, participants jsonb NOT NULL, layout text NOT NULL, status text NOT NULL,
   active_host text, handoff_occurred boolean NOT NULL DEFAULT false, participant_count int NOT NULL, active_participants jsonb NOT NULL,
   request_hash text NOT NULL, response jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now());
+-- host controls (FR-3.3): {"muted": [player ids], "spotlight": player id | null}
+ALTER TABLE costream_sessions ADD COLUMN IF NOT EXISTS controls jsonb NOT NULL DEFAULT '{}';
 CREATE TABLE IF NOT EXISTS chat_rooms (chat_room_id text PRIMARY KEY, last_seq bigint NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS chat_messages (
   id bigserial PRIMARY KEY, chat_room_id text NOT NULL, seq bigint NOT NULL, message_id text NOT NULL, sender text NOT NULL, text text NOT NULL,
