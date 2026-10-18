@@ -15,7 +15,8 @@ FOREGROUND = 4  # ApplicationState.RUNNING_IN_FOREGROUND
 
 
 def by_id(d, name):
-    return d.find_elements(AppiumBy.ACCESSIBILITY_ID, name)
+    """React Native exposes testID as the Android resource-id (and some views as content-desc): match either."""
+    return d.find_elements(AppiumBy.XPATH, f'//*[@resource-id="{name}" or @content-desc="{name}"]')
 
 
 def deep_link(d, url):

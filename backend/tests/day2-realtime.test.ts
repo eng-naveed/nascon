@@ -41,3 +41,17 @@ describe('hub fan-out', () => {
     expect([listeners('t:a'), listeners('t:b'), getGauge('nascon_active_ws_connections')]).toEqual([0, 0, before]);
   });
 });
+
+describe('ntfy push mirror', () => {
+  it('derives stable unguessable topics and posts JSON to the ntfy root', async () => {
+    const { ntfyTopic, pushNtfy } = await import('../src/features/day2/observability/ntfy');
+    expect(ntfyTopic('u-player')).toMatch(/^nascon-[A-Za-z0-9_-]{22}$/);
+    expect(ntfyTopic('u-player')).toBe(ntfyTopic('u-player'));
+    expect(ntfyTopic('u-player')).not.toBe(ntfyTopic('u-viewer'));
+    const calls: any[] = [];
+    expect(await pushNtfy('u-player', 'T', 'M', 'http://ntfy:80/', async (url, init) => (calls.push([url, JSON.parse(init.body)]), { ok: true }))).toBe(true);
+    expect(calls).toEqual([['http://ntfy:80/', { topic: ntfyTopic('u-player'), title: 'T', message: 'M', tags: ['sports'] }]]);
+    expect(await pushNtfy('u-player', 'T', 'M', '')).toBe(false);
+    expect(await pushNtfy('u-player', 'T', 'M', 'http://x', async () => { throw new Error('down'); })).toBe(false);
+  });
+});

@@ -306,3 +306,12 @@ describe('SSE streams', () => {
     expect([r.status, r.body.error.code]).toEqual([404, 'MATCH_NOT_FOUND']);
   });
 });
+
+describe('GET /api/v1/me/notifications', () => {
+  it('returns the caller ntfy topics; 401 without a token', async () => {
+    const { ntfyTopic } = await import('../../src/features/day2/observability/ntfy');
+    const r = await call(ctx.app, 'GET', '/api/v1/me/notifications', undefined, bearer(tok.player));
+    expect(r.body).toEqual({ ntfy_port: 8090, topics: [ntfyTopic('u-player'), ntfyTopic('player-alpha-1')] });
+    expect((await call(ctx.app, 'GET', '/api/v1/me/notifications')).status).toBe(401);
+  });
+});
