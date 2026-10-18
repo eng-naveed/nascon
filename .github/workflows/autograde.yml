@@ -1,0 +1,166 @@
+name: autograde
+
+# Phase II self-check, run exactly the way the cloud audit runs the stack (spec 5.2, 6.1-6.4, 7.3).
+# Reports land in tests/reports and are uploaded as the "reports" artifact.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DAY1_SALT: ci-day1-salt
+      DAY2_SALT: ci-day2-salt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Day 2 history descends from the locked Day 1 SHA (spec 7.3)
+        run: git merge-base --is-ancestor c9e6bfbd7d66550361bca51e1ccfbe55da578404 HEAD
+
+      - name: docker compose up -d --build (spec 5.2)
+        run: |
+          start=$(date +%s)
+          docker compose up -d --build
+          for i in $(seq 1 120); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/health || true)
+            if [ "$code" = "200" ]; then echo "health 200 after $(( $(date +%s) - start ))s"; break; fi
+            sleep 1
+          done
+          [ "$code" = "200" ] || { docker compose ps; exit 1; }
+
+      - name: Every container reports healthy; Grid ready with >= 3 nodes
+        run: |
+          for i in $(seq 1 90); do
+            total=$(docker compose ps -q | wc -l); healthy=$(docker compose ps --format '{{.Status}}' | grep -c '(healthy)' || true)
+            ok=$(curl -s localhost:4444/status | python3 -c 'import sys,json;v=json.load(sys.stdin)["value"];print(int(v["ready"] and len(v["nodes"])>=3))' 2>/dev/null || echo 0)
+            [ "$healthy" = "$total" ] && [ "$ok" = "1" ] && { docker compose ps; exit 0; }
+            sleep 2
+          done
+          docker compose ps; curl -s localhost:4444/status; exit 1
+
+      - name: Backend unit + API tests with coverage (Day 1 + Day 2)
+        run: ./run_tests.sh
+
+      - name: Day 1 end-to-end smoke
+        run: python3 backend/tests/integration/smoke.py
+
+      - name: Media probes (spec 6.1)
+        run: |
+          curl -s -XPOST localhost:8080/audit/v1/reset > /dev/null
+          curl -sf -XPOST localhost:8080/audit/v1/costream/session -H 'content-type: application/json' \
+            -d '{"session_id":"cs-session-101","host_player_id":"player-alpha-1","participants":["player-alpha-1","player-alpha-2"]}' > /dev/null
+          key=$(curl -s -XPOST localhost:8080/audit/v1/stream/key -H 'content-type: application/json' \
+            -d '{"action":"generate","player_id":"player-alpha-1"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["stream_key"])')
+          for p in "live/$key" "costream/cs-session-101" "match/match-m1"; do
+            code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "localhost:8888/$p/index.m3u8"); echo "$p -> $code"; [ "$code" = "200" ]
+          done
+          docker compose exec -T mediamtx ffmpeg -hide_banner -loglevel error -re -f lavfi -i testsrc2=size=640x360:rate=25 \
+            -t 3 -c:v libx264 -preset ultrafast -f flv "rtmp://localhost:1935/live/$key"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: QA dependencies
+        run: python -m pip install -r tests/requirements.txt
+
+      - name: k6 load profile (spec 6.4)
+        run: |
+          curl -s -XPOST localhost:8080/audit/v1/reset > /dev/null
+          docker run --rm --network host -v "$PWD/tests:/tests" grafana/k6:0.54.0 \
+            run --summary-export=/tests/reports/k6-summary.json /tests/k6_load.js
+
+      - name: Selenium Grid suite, 3 parallel sessions (spec 6.2.3)
+        run: pytest -n 3 tests/selenium/ --junitxml=tests/reports/selenium-report.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: tests/reports
+          if-no-files-found: warn
+
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=300
+
+  # Spec 6.3 on an Android emulator. Runs once the committed release APK registers the nascon:// intent-filter.
+  appium:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DAY1_SALT: ci-day1-salt
+      DAY2_SALT: ci-day2-salt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release APK declares the nascon scheme?
+        id: apk
+        run: |
+          apk=mobile/release/app-release.apk
+          aapt=$(ls "$ANDROID_HOME"/build-tools/*/aapt | tail -1)
+          if [ -f "$apk" ] && "$aapt" dump xmltree "$apk" AndroidManifest.xml | grep -q '"nascon"'; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"; echo "::notice::APK missing or without the nascon:// intent-filter; Appium suite not run"
+          fi
+
+      - name: Enable KVM for the emulator
+        if: steps.apk.outputs.ready == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+
+      - name: Backend stack (API, media, Grid)
+        if: steps.apk.outputs.ready == 'true'
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 120); do curl -sf localhost:8080/health > /dev/null && break; sleep 1; done
+
+      - uses: actions/setup-node@v4
+        if: steps.apk.outputs.ready == 'true'
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-python@v5
+        if: steps.apk.outputs.ready == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Appium 2 + UiAutomator2
+        if: steps.apk.outputs.ready == 'true'
+        run: |
+          npm install -g appium@2.11.5
+          appium driver install uiautomator2@3.8.0
+          python -m pip install -r tests/requirements.txt
+          (appium --address 127.0.0.1 --port 4723 > appium.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4723/status > /dev/null && break; sleep 1; done
+
+      - name: Deep-link + cross-surface suite on the emulator (spec 6.3)
+        if: steps.apk.outputs.ready == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            adb reverse tcp:8080 tcp:8080
+            adb install -r mobile/release/app-release.apk
+            adb shell am start -W -a android.intent.action.VIEW -d "nascon://entity/match-m1"
+            APP_APK=mobile/release/app-release.apk pytest tests/appium/ --junitxml=tests/reports/appium-report.xml
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.apk.outputs.ready == 'true'
+        with:
+          name: appium-report
+          path: |
+            tests/reports/appium-report.xml
+            appium.log
+          if-no-files-found: warn
