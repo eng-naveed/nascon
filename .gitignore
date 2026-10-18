@@ -11,3 +11,4 @@ mobile/release/*.log
 
 # local planning notes (not part of the submission)
 plan/
+.DS_Store
