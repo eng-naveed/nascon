@@ -1,0 +1,14 @@
+# Apple-Silicon (arm64) LOCAL TESTING ONLY override. Not used by the grader / CI.
+#   docker compose -f docker-compose.yml -f docker-compose.arm64.yml up -d --build
+# Swaps the amd64-only Selenium 4.25.0 images for the multi-arch 4.24.0 images
+# (node-chromium instead of node-chrome, since Google Chrome has no arm64 Linux build).
+# seleniarm/* is deprecated, so it is intentionally not used.
+services:
+  selenium-hub:
+    image: selenium/hub:4.24.0
+  node-chrome-1:
+    image: selenium/node-chromium:4.24.0
+  node-chrome-2:
+    image: selenium/node-chromium:4.24.0
+  node-firefox:
+    image: selenium/node-firefox:4.24.0

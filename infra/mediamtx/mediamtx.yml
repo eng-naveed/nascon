@@ -1,0 +1,58 @@
+# MediaMTX 1.9.1 for NaSCon '26 Phase II (spec 6.1 ports: RTMP 1935, HLS 8888, WebRTC WHIP/WHEP 8889).
+# Every publish/read is authorised by the API (stream key active? co-stream exists?), see
+# backend/src/features/day2/streaming/service.ts mediaAuth.
+logLevel: info
+
+api: yes
+apiAddress: :9997
+
+authMethod: http
+authHTTPAddress: http://api:8080/internal/media/auth
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+
+rtspAddress: :8554
+rtmpAddress: :1935
+
+# Low-latency HLS (FR-3.2 < 3 s glass-to-glass target on LAN); WebRTC for sub-second playback.
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsAllowOrigin: '*'
+
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+webrtcLocalUDPAddress: :8189
+
+srt: no
+
+pathDefaults:
+  # a real encoder (OBS / FFmpeg / in-app WHIP) always replaces the placeholder
+  overridePublisher: yes
+
+paths:
+  # Creator streams. Until the creator goes live, a reader gets a generated placeholder feed, so the
+  # playback URL from POST /audit/v1/stream/key always answers with a real playlist. Not restarted when
+  # a real publisher takes the path over.
+  "~^live/[A-Za-z0-9_.-]+$":
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel error -re
+      -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -b:v 1500k
+      -c:a aac -b:a 64k -f rtsp -rtsp_transport tcp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandStartTimeout: 10s
+    runOnDemandCloseAfter: 15s
+
+  # Co-stream composites (spec 5.5 composite_playback_url). Same placeholder until the compositor publishes.
+  "~^costream/[A-Za-z0-9_.:-]+$":
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel error -re
+      -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i sine=frequency=660:sample_rate=48000
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -b:v 1500k
+      -c:a aac -b:a 64k -f rtsp -rtsp_transport tcp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandStartTimeout: 10s
+    runOnDemandCloseAfter: 15s
