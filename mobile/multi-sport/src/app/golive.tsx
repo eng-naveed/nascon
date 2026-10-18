@@ -4,7 +4,8 @@ import { Stack } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { api, friendly } from '@/api/client';
-import { forDevice, publishPageUrl } from '@/api/live';
+import { forDevice } from '@/api/live';
+import { whipPublisherHtml } from '@/features/broadcast/whipPage';
 import { useApp } from '@/state/app';
 import { Screen, T } from '@/components/Screen';
 import { Card } from '@/components/Card';
@@ -16,7 +17,7 @@ type Key = { stream_key: string; status: string; ingest_endpoints: { rtmp: strin
 
 /**
  * Solo broadcasting (FR-3.2): issue / rotate / revoke a stream key, show OBS ingest URLs, or go live from
- * this phone over WebRTC (WHIP) through the media server's publish page. Revoking cuts the stream in < 2 s.
+ * this phone over WebRTC (WHIP) from an in-app publisher page. Revoking cuts the stream in < 2 s.
  */
 export default function GoLive() {
   const { session } = useApp();
@@ -66,7 +67,9 @@ export default function GoLive() {
       {live && active ? (
         <View style={s.preview} testID="golive-broadcaster">
           <WebView
-            source={{ uri: publishPageUrl(key!.stream_key) }}
+            // inline page on a localhost base URL = secure context, so the camera works (see whipPage.ts)
+            source={{ html: whipPublisherHtml(forDevice(key!.ingest_endpoints!.webrtc)), baseUrl: 'http://localhost' }}
+            originWhitelist={['*']}
             mediaCapturePermissionGrantType="grant"
             allowsInlineMediaPlayback
             mediaPlaybackRequiresUserAction={false}

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from '@/state/app';
@@ -9,11 +9,28 @@ import { useFonts, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from 
 import { C, F } from '@/theme';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
 import { useNotifications } from '@/hooks/useNotifications';
+import { returnAfterLogin } from '@/components/LiveChat';
 
 function Inner() {
   const { ready, session } = useApp();
   const insets = useSafeAreaInsets();
   useNotifications(!!session);
+  const pathname = usePathname();
+  // an inline login (stream / match chat) must leave the viewer where they were, not on the Fixtures tab
+  useEffect(() => {
+    const to = returnAfterLogin.path;
+    if (!session || !to) return;
+    if (pathname !== to) {
+      returnAfterLogin.path = null;
+      const t = setTimeout(() => router.navigate(to as never), 0);
+      return () => clearTimeout(t);
+    }
+    // still on the right screen: keep watching briefly in case the guard flip resets navigation a moment later
+    const t = setTimeout(() => {
+      if (returnAfterLogin.path === to) returnAfterLogin.path = null;
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [session, pathname]);
   const [fontsLoaded, fontError] = useFonts({ BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold });
   if (!ready || (!fontsLoaded && !fontError))
     return (

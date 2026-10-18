@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { usePathname } from 'expo-router';
 import { api, ApiError, friendly } from '@/api/client';
 import { useLiveSocket, wsUrl } from '@/api/live';
 import { useApp } from '@/state/app';
@@ -9,6 +10,12 @@ import { ErrorBanner } from '@/components/ErrorBanner';
 import { C } from '@/theme';
 
 type Msg = { seq: number; sender: string; text: string; flagged?: boolean };
+
+/**
+ * Where to send the viewer after an inline login. Logging in flips the root Stack.Protected guards, and expo-router
+ * may then reset to the first available screen (Fixtures); the root layout reads this and brings the viewer back.
+ */
+export const returnAfterLogin: { path: string | null } = { path: null };
 
 /**
  * Live room chat (FR-5.3): history over REST, new messages over /ws/chat/{room}. Reading is public; sending needs
@@ -26,6 +33,7 @@ export function LiveChat({ room, prefix, style, inline }: { room: string; prefix
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const seen = useRef(new Set<number>());
+  const pathname = usePathname();
 
   const add = useCallback((m: Msg) => {
     if (seen.current.has(m.seq)) return;
@@ -60,9 +68,11 @@ export function LiveChat({ room, prefix, style, inline }: { room: string; prefix
     setBusy(true);
     setErr(null);
     try {
+      returnAfterLogin.path = pathname;
       await login(email, password);
       setShowLogin(false);
     } catch (e) {
+      returnAfterLogin.path = null;
       setErr(friendly(e));
     } finally {
       setBusy(false);

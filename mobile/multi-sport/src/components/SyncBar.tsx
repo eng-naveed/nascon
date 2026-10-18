@@ -19,14 +19,17 @@ function useSyncState() {
 }
 
 /** Always-visible, compact status pill for the header (dot + status + pending count). */
-export function SyncPill() {
+/** `compact` drops the word and keeps the icon (and pending count): for crowded headers such as the tab bar's. */
+export function SyncPill({ compact }: { compact?: boolean } = {}) {
   const { cfg, pending, label } = useSyncState();
   return (
-    <Pressable testID="sync-bar" accessibilityRole="button" accessibilityLabel={label} onPress={() => router.push('/sync')} hitSlop={8} style={[s.pill, { backgroundColor: cfg.bg }]}>
-      <Ionicons name={cfg.icon} size={15} color={cfg.fg} />
-      <Text testID="sync-status-text" style={[s.pt, { color: cfg.fg }]}>
-        {cfg.t}
-      </Text>
+    <Pressable testID="sync-bar" accessibilityRole="button" accessibilityLabel={label} onPress={() => router.push('/sync')} hitSlop={8} style={[s.pill, { backgroundColor: cfg.bg }, compact && { paddingHorizontal: 8 }]}>
+      <Ionicons name={cfg.icon} size={compact ? 18 : 15} color={cfg.fg} />
+      {compact ? null : (
+        <Text testID="sync-status-text" style={[s.pt, { color: cfg.fg }]}>
+          {cfg.t}
+        </Text>
+      )}
       {pending > 0 ? (
         <View style={[s.count, { backgroundColor: cfg.fg }]}>
           <Text testID="sync-pending-count" style={s.countT}>
