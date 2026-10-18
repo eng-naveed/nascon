@@ -2,6 +2,11 @@ import { Pool, PoolClient } from 'pg';
 import { config } from './config';
 
 export const pool = new Pool({ connectionString: config.databaseUrl, max: 20 });
+// An idle client dropped by the server (Postgres restart, admin terminate) is already purged by pg-pool;
+// without a listener the pool's 'error' event would crash the process.
+pool.on('error', (err) => {
+  console.error(`pg pool: idle client error (${(err as { code?: string }).code ?? 'no code'}): ${err.message}`);
+});
 
 export type Db = Pick<PoolClient, 'query'>;
 
