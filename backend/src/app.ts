@@ -19,6 +19,7 @@ import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metri
 import { runHealth } from './core/health';
 import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT } from './features/day2/common';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
+import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
 const hits = new Map<string, number[]>();
 function rateLimit(ip: string) {
@@ -155,6 +156,7 @@ export function buildApp(): FastifyInstance {
       try {
         const r = await tx((c) => resetAndSeed(c, b));
         clearModerationCache();
+        clearChatState();
         return r;
       } catch (e: any) {
         if (attempt < 4 && (e?.code === '40P01' || e?.code === '40001')) {
@@ -202,6 +204,10 @@ export function buildApp(): FastifyInstance {
 
   // ---- mobile / production routes (/api/v1) ----
   const V = '/api/v1';
+  // ---- live audience chat (Phase II): guests read, members write ----
+  app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
+  app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));
+  app.post(`${V}/chat/:room/moderation`, async (req) => moderate(auth(req), (req.params as any).room, req.body));
   app.post(`${V}/auth/login`, async (req) => {
     const b = parse(z.object({ email: z.string().min(3).max(200), password: z.string().min(1).max(200) }), req.body);
     const r = await pool.query('SELECT * FROM users WHERE lower(email)=lower($1)', [b.email]);
