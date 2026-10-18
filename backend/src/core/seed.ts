@@ -9,7 +9,7 @@ const TABLES = [
   'kv', 'tenants', 'users', 'rbac_entities', 'clubs', 'sports', 'leagues', 'matches', 'events', 'products', 'variants', 'orders',
   'queue_events', 'roster_leagues', 'roster_squads', 'roster_players', 'roster_regs', 'roster_audit', 'roster_requests', 'sync_actions',
   // Phase II
-  'stream_keys', 'costream_sessions', 'chat_rooms', 'chat_messages', 'qr_codes', 'qr_scan_stats', 'guest_tokens', 'carts', 'moderation_state', 'dlq_events', 'erased_users',
+  'stream_keys', 'costream_sessions', 'chat_rooms', 'chat_messages', 'qr_codes', 'qr_scan_stats', 'guest_tokens', 'carts', 'moderation_state', 'dlq_events', 'erased_users', 'follows',
 ];
 
 let pwHash: string | null = null;

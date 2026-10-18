@@ -17,6 +17,7 @@ import { offlineSync } from './features/offline/service';
 import { getOrder, listQueue, transitionOrder } from './features/orders/service';
 import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metrics';
 import { runHealth } from './core/health';
+import { followers, setFollow } from './features/day2/athletes/follow';
 import { guestWriteRejection } from './features/day2/common';
 import { cartMerge } from './features/day2/qr_guest/cart';
 import { issueGuestSession } from './features/day2/qr_guest/guest';
@@ -271,6 +272,10 @@ export function buildApp(): FastifyInstance {
     auth(req);
     return scanStats((req.params as any).id);
   });
+  // ---- athlete follow/unfollow (FR-3.1): idempotent per (follower, athlete), count derived from rows ----
+  app.post(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, true));
+  app.delete(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, false));
+  app.get(`${V}/players/:id/followers`, async (req) => followers((req.params as any).id));
   // ---- live audience chat (Phase II): guests read, members write ----
   app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
   app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));
