@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { Stack, router, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaInsetsContext, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { AppProvider, useApp } from '@/state/app';
 import { SyncBanner, SyncPill } from '@/components/SyncBar';
 import { useFonts, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
@@ -89,9 +90,11 @@ export default function Root() {
   useAutoUpdate();
   return (
     <SafeAreaProvider>
-      <AppProvider>
-        <Inner />
-      </AppProvider>
+      <KeyboardProvider>
+        <AppProvider>
+          <Inner />
+        </AppProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

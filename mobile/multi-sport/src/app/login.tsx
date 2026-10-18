@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,8 +44,7 @@ export default function Login() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.c} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView contentContainerStyle={s.c} keyboardShouldPersistTaps="handled" bottomOffset={24}>
           <View style={s.ring}><View style={[s.logo, { backgroundColor: primary }]}>
             <Ionicons name="trophy" size={40} color={onColor(primary)} />
           </View></View>
@@ -59,8 +59,7 @@ export default function Login() {
           <Chips testIDPrefix="demo" value={email} onChange={(v) => { setEmail(v); setPassword('Nascon@26'); }} options={DEMOS} />
           <Button label="Scan a match QR (no account needed)" icon="qr-code" variant="secondary" testID="login-scan" onPress={() => router.push('/scan')} />
           <Button label={`Server: ${serverUrl}`} icon="server" variant="secondary" testID="login-server-settings" onPress={() => router.push('/settings')} />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

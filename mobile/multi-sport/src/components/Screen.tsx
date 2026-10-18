@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Skeleton } from './feedback';
 import { C, F, S } from '@/theme';
 import { useApp } from '@/state/app';
@@ -20,10 +21,10 @@ export function Screen({
   }, [onRefresh]);
   return (
     <View style={s.root} testID={testID}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={s.c}
         keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
+        bottomOffset={24}
         refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={doRefresh} tintColor={primary} colors={[primary]} progressBackgroundColor={C.card} title={refreshing ? 'Refreshing…' : undefined} titleColor={C.sub} /> : undefined}
       >
         {loading ? (
@@ -31,7 +32,7 @@ export function Screen({
         ) : (
           children
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
       {footer}
     </View>
   );

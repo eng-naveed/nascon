@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { hlsUrl, useLiveSocket, wsUrl } from '@/api/live';
 import { Card } from '@/components/Card';
@@ -24,7 +25,7 @@ export default function CoStream() {
   });
 
   return (
-    <View style={s.root} testID="costream-screen">
+    <KeyboardAvoidingView behavior="padding" automaticOffset style={s.root} testID="costream-screen">
       <Stack.Screen options={{ title: 'Co-stream' }} />
       <LivePlayer uri={hlsUrl(`costream/${sid}`)} label={`Co-stream ${sid}`} testID="costream-video" />
       <Card testID="costream-state">
@@ -39,7 +40,7 @@ export default function CoStream() {
         </View>
       </Card>
       <LiveChat room={`chat-${sid}`} prefix="costream" style={{ flex: 1 }} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
