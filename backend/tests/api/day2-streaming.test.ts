@@ -83,8 +83,39 @@ describe('POST /audit/v1/stream/key (spec 5.4)', () => {
     expect(await status(theirs.body.stream_key)).toBe('active');
     const rev = await key({ action: 'revoke', player_id: 'player-alpha-1' });
     expect([rev.status, rev.body.stream_key, rev.body.status]).toEqual([200, k, 'revoked']);
-    // a revoked key still belongs to its player
-    expect((await key({ action: 'rotate', player_id: 'player-beta-1', stream_key_override: k })).status).toBe(409);
+    // a revoked key is dead for everyone: KEY_REVOKED takes precedence over the ownership conflict
+    const dead = await key({ action: 'rotate', player_id: 'player-beta-1', stream_key_override: k });
+    expect([dead.status, dead.body.error.code]).toEqual([409, 'KEY_REVOKED']);
+  });
+
+  it('a revoked override is 409 KEY_REVOKED for rotate and generate; nothing changes and media auth stays 409', async () => {
+    const k = VEC.stream_key_override;
+    await key(VEC);
+    const rev = await key({ action: 'revoke', player_id: 'player-alpha-1' });
+    const current = await key({ action: 'generate', player_id: 'player-alpha-1' });
+    for (const action of ['rotate', 'generate']) {
+      const r = await key({ ...VEC, action });
+      expect([r.status, r.body.error.code, r.body.error.details]).toEqual([409, 'KEY_REVOKED', { stream_key: k }]);
+    }
+    const rows = (await ctx.db.pool.query('SELECT stream_key, status, label FROM stream_keys WHERE player_id=$1 ORDER BY stream_key', ['player-alpha-1'])).rows;
+    expect(rows).toEqual(
+      [{ stream_key: k, status: 'revoked', label: 'OBS-Main-Desk' }, { stream_key: current.body.stream_key, status: 'active', label: 'default' }].sort((a, b) => (a.stream_key < b.stream_key ? -1 : 1)),
+    );
+    const pub = await auth('publish', `live/${k}`);
+    expect([pub.status, pub.body.error.code]).toEqual([409, 'KEY_REVOKED']);
+    expect((await auth('publish', `live/${current.body.stream_key}`)).status).toBe(200);
+    // a repeated revoke of the named key still returns the same 200 body
+    const again = await key({ action: 'revoke', player_id: 'player-alpha-1', stream_key_override: k });
+    expect([again.status, again.raw]).toEqual([200, rev.raw]);
+  });
+
+  it("re-activating the player's own rotated (superseded) override is 200", async () => {
+    await key(VEC);
+    const next = await key({ action: 'rotate', player_id: 'player-alpha-1' });
+    expect(await status(VEC.stream_key_override)).toBe('rotated');
+    const back = await key(VEC);
+    expect([back.status, back.body.status, back.body.signature]).toEqual([200, 'active', ksig(VEC.stream_key_override, 'rotate', 'player-alpha-1', 'active')]);
+    expect(await status(next.body.stream_key)).toBe('rotated');
   });
 
   it('two players racing for the same new override: exactly one owns it, the other gets 409', async () => {

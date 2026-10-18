@@ -75,7 +75,10 @@ export async function streamKey(rawBody: unknown) {
     if (b.stream_key_override) {
       // per-key lock (always after the player lock) so two players racing for one new override cannot both pass
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['streamkey:' + key]);
-      const owner = await c.query('SELECT player_id FROM stream_keys WHERE stream_key=$1', [key]);
+      const owner = await c.query('SELECT player_id, status FROM stream_keys WHERE stream_key=$1', [key]);
+      // a revoked key is dead for good (5.4); a superseded ('rotated') key of the same player may be re-activated
+      if (owner.rowCount && owner.rows[0].status === 'revoked')
+        throw conflict('KEY_REVOKED', 'This stream key has been revoked.', { stream_key: key });
       if (owner.rowCount && owner.rows[0].player_id !== b.player_id)
         throw conflict('STREAM_KEY_CONFLICT', 'This stream key belongs to another player.', { stream_key: key });
     }
