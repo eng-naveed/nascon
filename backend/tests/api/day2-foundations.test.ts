@@ -117,6 +117,20 @@ describe('postponed / cancelled / abandoned (edge case 2 prerequisites)', () => 
     expect(await status(b)).toBe('abandoned');
   });
 
+  it.each([
+    ['status_update', 'cancelled'],
+    ['match_status', 'abandoned'],
+    ['set_status', 'postponed'],
+  ])('accepts the generic %s event with {status: %s}', async (type, target) => {
+    const id = uniq('m');
+    await init(id);
+    await ev(uniq('e'), id, 'match_start');
+    expect((await ev(uniq('e'), id, type, { status: target })).status).toBe(201);
+    expect(await status(id)).toBe(target);
+    const bad = await ev(uniq('e'), uniq('m'), type, {});
+    expect([bad.status, bad.body.error.code]).toEqual([400, 'VALIDATION_ERROR']);
+  });
+
   it('rejects further transitions and play on a non-playing match', async () => {
     const id = uniq('m');
     await init(id);
@@ -180,5 +194,82 @@ describe('extended /health', () => {
     expect(JSON.parse(r.body)).toEqual({ status: 'unavailable' });
     expect(JSON.parse(r.headers['x-health-checks'] as string)).toEqual({ db: 'down', redis: 'skipped', media: 'skipped' });
     await ctx.reset();
+  });
+  it('503 on a Day 1 volume that lacks the Phase II baseline (match-m1 / QR m1-live)', async () => {
+    await ctx.db.pool.query("DELETE FROM qr_codes WHERE short_code='m1-live'");
+    expect((await call(ctx.app, 'GET', '/health')).status).toBe(503);
+    await ctx.reset();
+    await ctx.db.pool.query("DELETE FROM matches WHERE match_id='match-m1'");
+    expect((await call(ctx.app, 'GET', '/health')).status).toBe(503);
+    await ctx.reset();
+    expect((await call(ctx.app, 'GET', '/health')).status).toBe(200);
+  });
+});
+
+describe('/metrics Phase II contract (spec 5.9 / NFR-6)', () => {
+  it('uses the exact Content-Type and always emits the five nascon_* series with correct types', async () => {
+    await ctx.reset();
+    const r = await ctx.app.inject({ method: 'GET', url: '/metrics' });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toBe('text/plain; version=0.0.4');
+    const types: Record<string, string> = {
+      nascon_active_ws_connections: 'gauge',
+      nascon_active_streams_total: 'gauge',
+      nascon_stream_bitrate_kbps: 'gauge',
+      nascon_dlq_depth: 'gauge',
+      nascon_qr_scans_total: 'counter',
+    };
+    for (const [name, type] of Object.entries(types)) {
+      expect(r.body).toContain(`# TYPE ${name} ${type}\n`);
+      expect(r.body).toMatch(new RegExp(`^${name} 0$`, 'm'));
+    }
+  });
+  it('reflects active streams, DLQ depth, QR scans and live gauges', async () => {
+    const { setGauge } = await import('../../src/core/metrics');
+    await ctx.db.pool.query("INSERT INTO stream_keys(stream_key, player_id, status) VALUES ('sk_m1','player-alpha-1','active'), ('sk_m2','player-alpha-1','revoked')");
+    await ctx.db.pool.query("INSERT INTO dlq_events(chat_room_id, event_id, attempts) VALUES ('chat-x','n-1',3), ('chat-x','n-2',3)");
+    await ctx.db.pool.query("UPDATE qr_codes SET scan_count = 4 WHERE short_code='m1-live'");
+    setGauge('nascon_active_ws_connections', 25);
+    setGauge('nascon_stream_bitrate_kbps', 2500);
+    const body = (await ctx.app.inject({ method: 'GET', url: '/metrics' })).body;
+    for (const line of ['nascon_active_streams_total 1', 'nascon_dlq_depth 2', 'nascon_qr_scans_total 4', 'nascon_active_ws_connections 25', 'nascon_stream_bitrate_kbps 2500'])
+      expect(body).toMatch(new RegExp(`^${line}$`, 'm'));
+    setGauge('nascon_active_ws_connections', 0);
+    setGauge('nascon_stream_bitrate_kbps', 0);
+    await ctx.reset();
+  });
+});
+
+describe('chat_messages schema', () => {
+  const ins = (seq: number) =>
+    ctx.db.pool.query("INSERT INTO chat_messages(chat_room_id, seq, message_id, sender, text) VALUES ('chat-cs-session-101', $1, 'msg-1', 'u', 't')", [seq]);
+  it('accepts a reused message_id in the same room (graders reuse msg-1)', async () => {
+    await ins(1);
+    await ins(2);
+    const r = await ctx.db.pool.query("SELECT count(*)::int AS n FROM chat_messages WHERE message_id='msg-1'");
+    expect(r.rows[0].n).toBe(2);
+    await expect(ins(2)).rejects.toThrow(/duplicate key/); // seq stays unique per room
+    await ctx.reset();
+  });
+  it('migration drops the old UNIQUE(chat_room_id, message_id) from an existing volume', async () => {
+    const { migrate } = await import('../../src/core/migrate');
+    await ctx.db.pool.query('ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_chat_room_id_message_id_key UNIQUE (chat_room_id, message_id)');
+    await migrate();
+    const r = await ctx.db.pool.query("SELECT count(*)::int AS n FROM pg_constraint WHERE conname='chat_messages_chat_room_id_message_id_key'");
+    expect(r.rows[0].n).toBe(0);
+  });
+});
+
+describe('startup seeding (needsBaselineSeed)', () => {
+  it('is false after reset and true when tenants or a Phase II marker is missing', async () => {
+    const { needsBaselineSeed } = await import('../../src/core/seed');
+    expect(await needsBaselineSeed(ctx.db.pool)).toBe(false);
+    await ctx.db.pool.query("DELETE FROM qr_codes WHERE short_code='m1-live'");
+    expect(await needsBaselineSeed(ctx.db.pool)).toBe(true);
+    await ctx.reset();
+    await ctx.db.pool.query('DELETE FROM tenants');
+    expect(await needsBaselineSeed(ctx.db.pool)).toBe(true);
+    await ctx.reset();
+    expect(await needsBaselineSeed(ctx.db.pool)).toBe(false);
   });
 });

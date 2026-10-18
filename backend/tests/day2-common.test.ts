@@ -5,6 +5,7 @@ import { sign } from '../src/core/crypto';
 import { checkMedia, checkRedis, runHealth } from '../src/core/health';
 import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT, entityTypeOf } from '../src/features/day2/common';
 import { statusFromEvent } from '../src/features/events/projection';
+import { missingSalts } from '../src/core/config';
 
 describe('Phase II signature recipe (spec Appendix A, reference salt)', () => {
   const salt = 'T01D27ad7ffff12e';
@@ -50,6 +51,10 @@ describe('status events', () => {
     expect(t('status_change', { status: 'postponed' })).toBe('postponed');
     expect(t('status_change', { status: 'completed' })).toBeNull();
     expect(t('status_change', {})).toBeNull();
+    expect(t('status_update', { status: 'cancelled' })).toBe('cancelled');
+    expect(t('match_status', { status: 'abandoned' })).toBe('abandoned');
+    expect(t('set_status', { status: 'postponed' })).toBe('postponed');
+    expect(t('set_status', { status: 'in_progress' })).toBeNull();
     expect(t('score')).toBeNull();
     expect(t('constructor')).toBeNull();
   });
@@ -98,5 +103,14 @@ describe('health probes', () => {
     expect(await runHealth({ db: async () => true, redisUrl, mediaApiUrl: httpUrl })).toEqual({ ok: true, checks: { db: 'ok', redis: 'ok', media: 'ok' } });
     const down = await runHealth({ db: async () => true, redisUrl: `redis://127.0.0.1:${closedPort}`, mediaApiUrl: httpUrl });
     expect(down).toEqual({ ok: false, checks: { db: 'ok', redis: 'down', media: 'ok' } });
+  });
+});
+
+describe('missingSalts (startup warning)', () => {
+  it('names each empty salt and nothing when both are set', () => {
+    expect(missingSalts({ salt: '', day2Salt: '' })).toEqual(['DAY1_SALT', 'DAY2_SALT']);
+    expect(missingSalts({ salt: 's1', day2Salt: '' })).toEqual(['DAY2_SALT']);
+    expect(missingSalts({ salt: '', day2Salt: 's2' })).toEqual(['DAY1_SALT']);
+    expect(missingSalts({ salt: 's1', day2Salt: 's2' })).toEqual([]);
   });
 });
