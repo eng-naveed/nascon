@@ -1,5 +1,5 @@
 /** Minimal single-page PDF (Helvetica, uncompressed) with extractable text. */
-const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+export const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 
 export function formatPkr(minor: number): string {
   const major = Math.floor(minor / 100);
@@ -8,7 +8,7 @@ export function formatPkr(minor: number): string {
 }
 
 /** Wraps a page content stream in a one-page document using Helvetica (F1) and Helvetica-Bold (F2). */
-function assemble(content: string): Buffer {
+export function assemble(content: string): Buffer {
   const objs = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',

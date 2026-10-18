@@ -2,8 +2,10 @@ import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { config } from '../../core/config';
 import { bodyHash, sign } from '../../core/crypto';
+import { afterCommit } from '../../core/db';
 import { AppError, conflict, notFound, validation } from '../../core/errors';
 import { idSchema, parse } from '../../core/validate';
+import { publish } from '../day2/observability/bus';
 import { getSport } from '../sports/service';
 import { GENERIC_STATUS_TYPES, MatchMeta, SCORABLE, STATUS_EVENT_TYPES, StoredEvent, project, statusFromEvent } from './projection';
 
@@ -121,5 +123,7 @@ export async function appendEvent(c: PoolClient, rawBody: unknown): Promise<{ st
   await c.query('INSERT INTO events(event_id, match_id, seq, type, payload, signature, body_hash, response) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [
     body.event_id, body.match_id, seq, body.type, JSON.stringify(payload), signature, hash, JSON.stringify(response),
   ]);
+  // live score banner, QR target invalidation: only once this event is durable
+  afterCommit(c, () => publish(`match:${body.match_id}`, { type: 'match.event', match_id: body.match_id, event_type: body.type, sequence: seq }));
   return { status: 201, body: response };
 }

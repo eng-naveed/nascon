@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { config } from '../../core/config';
 import { sign } from '../../core/crypto';
+import { AppError } from '../../core/errors';
 
 type Db = Pick<PoolClient, 'query'>;
 
@@ -29,6 +30,18 @@ export function entityTypeOf(id: string): 'match' | 'club' | 'player' | 'costrea
   return null;
 }
 
-export const GUEST_TOKEN_RE = /^Bearer\s+(guest_anon_tok_[A-Za-z0-9_.:-]*)$/i;
+// Any bearer starting with "guest_" is a guest credential (cart-merge accepts any guest_* token); no JWT starts with it.
+export const GUEST_TOKEN_RE = /^Bearer\s+(guest_[A-Za-z0-9_.:-]+)$/i;
 /** Guest tokens may still call these write-shaped routes (token issuing and the cart-merge probe itself). */
 export const GUEST_WRITE_EXEMPT = new Set(['/audit/v1/guest/cart-merge', '/api/v1/guest/session']);
+
+/**
+ * The zero-trust write boundary (FR-4.3): the 403 a request would get for carrying a guest token on a write,
+ * or null. Used by the onRequest hook and by the cart-merge probe's internal write simulation.
+ */
+export function guestWriteRejection(method: string, url: string, authorization: string | undefined): AppError | null {
+  const m = GUEST_TOKEN_RE.exec(authorization ?? '');
+  if (!m || method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return null;
+  if (GUEST_WRITE_EXEMPT.has(url.split('?')[0])) return null;
+  return new AppError(403, 'GUEST_WRITE_FORBIDDEN', 'Anonymous guest tokens cannot perform write mutations.', { guest_token: m[1] });
+}

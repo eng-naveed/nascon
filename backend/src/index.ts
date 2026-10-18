@@ -4,6 +4,7 @@ import { pool, tx } from './core/db';
 import { migrate } from './core/migrate';
 import { needsBaselineSeed, resetAndSeed } from './core/seed';
 import { processQueueOnce } from './features/orders/service';
+import { loadErased } from './features/day2/qr_guest/privacy';
 
 async function main() {
   const missing = missingSalts();
@@ -23,6 +24,7 @@ async function main() {
     console.log('Baseline seed missing: seeding');
     await tx((c) => resetAndSeed(c, {}));
   }
+  await loadErased(pool);
   // internal job queue consumer
   setInterval(() => {
     processQueueOnce().catch(() => undefined);

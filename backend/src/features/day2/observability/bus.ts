@@ -4,7 +4,7 @@
  * affects the writer or the other subscribers.
  */
 export type BusEvent = { type: string; [k: string]: unknown };
-type Handler = (e: BusEvent) => void;
+type Handler = (e: BusEvent, topic: string) => void;
 
 const subs = new Map<string, Set<Handler>>();
 
@@ -18,12 +18,15 @@ export function subscribe(topic: string, h: Handler): () => void {
   };
 }
 
+/** Topic that receives every event (cache invalidation, metrics). Handlers get the topic as a second argument. */
+export const ALL = '*';
+
 /** Returns how many subscribers received the event. */
 export function publish(topic: string, e: BusEvent): number {
   let n = 0;
-  for (const h of subs.get(topic) ?? []) {
+  for (const h of [...(subs.get(topic) ?? []), ...(topic === ALL ? [] : (subs.get(ALL) ?? []))]) {
     try {
-      h(e);
+      h(e, topic);
       n++;
     } catch {
       /* a broken subscriber is the hub's problem, not the writer's */

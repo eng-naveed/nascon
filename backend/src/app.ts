@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from './core/config';
-import { AppError, forbidden, notFound } from './core/errors';
+import { AppError, forbidden, notFound, unauthenticated } from './core/errors';
 import { pool, tx } from './core/db';
 import { verifyPassword } from './core/crypto';
 import { idSchema, parse } from './core/validate';
@@ -17,7 +17,12 @@ import { offlineSync } from './features/offline/service';
 import { getOrder, listQueue, transitionOrder } from './features/orders/service';
 import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metrics';
 import { runHealth } from './core/health';
-import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT } from './features/day2/common';
+import { guestWriteRejection } from './features/day2/common';
+import { cartMerge } from './features/day2/qr_guest/cart';
+import { issueGuestSession } from './features/day2/qr_guest/guest';
+import { clearErased, eraseUser, isErased } from './features/day2/qr_guest/privacy';
+import { clearQrCache, getQr, qrEntry, render, resolveShortCode, scanStats } from './features/day2/qr_guest/qr';
+import { qrPdf, qrPng, qrSvg } from './features/day2/qr_guest/render';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
@@ -94,10 +99,8 @@ export function buildApp(): FastifyInstance {
   // Phase II zero-trust boundary: an anonymous guest token can never perform a write, whatever the route.
   // Runs before body parsing and validation, so it answers 403 even for empty or malformed bodies.
   app.addHook('onRequest', async (req) => {
-    const m = GUEST_TOKEN_RE.exec(req.headers.authorization ?? '');
-    if (!m || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
-    if (GUEST_WRITE_EXEMPT.has(req.url.split('?')[0])) return;
-    throw new AppError(403, 'GUEST_WRITE_FORBIDDEN', 'Anonymous guest tokens cannot perform write mutations.', { guest_token: m[1] });
+    const rejection = guestWriteRejection(req.method, req.url, req.headers.authorization);
+    if (rejection) throw rejection;
   });
 
   app.addHook('onRequest', async (req) => {
@@ -105,7 +108,12 @@ export function buildApp(): FastifyInstance {
     if (req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/v1/auth/')) rateLimit(req.ip);
   });
 
-  const auth = (req: FastifyRequest) => authenticate(req.headers.authorization);
+  const auth = (req: FastifyRequest) => {
+    const u = authenticate(req.headers.authorization);
+    // tokens of an erased account stop working immediately (NFR-9)
+    if (isErased(u.sub) || (u.player_id && isErased(u.player_id))) throw unauthenticated();
+    return u;
+  };
   const q = (req: FastifyRequest) => (req.query ?? {}) as Record<string, string>;
   const send = (reply: FastifyReply, r: { status: number; body: unknown }) => reply.status(r.status).send(r.body);
 
@@ -158,6 +166,8 @@ export function buildApp(): FastifyInstance {
         const r = await tx((c) => resetAndSeed(c, b));
         clearModerationCache();
         clearChatState();
+        clearQrCache();
+        clearErased();
         return r;
       } catch (e: any) {
         if (attempt < 4 && (e?.code === '40P01' || e?.code === '40001')) {
@@ -186,6 +196,28 @@ export function buildApp(): FastifyInstance {
   app.post(`${A}/offline-sync`, async (req) => offlineSync(req.body));
   app.post(`${A}/moderation/test`, async (req) => moderationProbe(req.body));
 
+  // ---- dynamic QR deep links, guest cart merge, privacy erasure (Phase II qr_guest) ----
+  const ua = (req: FastifyRequest) => req.headers['user-agent'];
+  app.get(`${A}/qr/:id`, async (req) => getQr((req.params as any).id, q(req), ua(req)));
+  app.get(`${A}/qr/:id/export.svg`, async (req, reply) => {
+    const e = await qrEntry((req.params as any).id);
+    return reply.header('content-type', 'image/svg+xml').send(await qrSvg(render(e).short_url));
+  });
+  app.get(`${A}/qr/:id/export.png`, async (req, reply) => {
+    const e = await qrEntry((req.params as any).id);
+    return reply.header('content-type', 'image/png').send(await qrPng(render(e).short_url));
+  });
+  app.get(`${A}/qr/:id/export.pdf`, async (req, reply) => {
+    const e = await qrEntry((req.params as any).id);
+    return reply.header('content-type', 'application/pdf').send(qrPdf(e.entity_id, render(e).short_url, `${e.entity_type} - ${e.entity_status}`));
+  });
+  app.get('/q/:code', async (req, reply) => {
+    const to = await resolveShortCode((req.params as any).code, ua(req));
+    return reply.status(302).header('location', to).header('cache-control', 'no-store').send();
+  });
+  app.post(`${A}/guest/cart-merge`, async (req) => cartMerge(req.body));
+  app.delete(`${A}/privacy/user/:id`, async (req) => eraseUser((req.params as any).id));
+
   const probes: [string, string, string, string?][] = [
     ['post', '/rbac/tenants', 'tenants'],
     ['post', '/rbac/leagues/:id/fixtures', 'league-fixtures'],
@@ -205,6 +237,11 @@ export function buildApp(): FastifyInstance {
 
   // ---- mobile / production routes (/api/v1) ----
   const V = '/api/v1';
+  app.post(`${V}/guest/session`, async (_req, reply) => reply.status(201).send(await issueGuestSession()));
+  app.get(`${V}/qr/:id/stats`, async (req) => {
+    auth(req);
+    return scanStats((req.params as any).id);
+  });
   // ---- live audience chat (Phase II): guests read, members write ----
   app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
   app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));
