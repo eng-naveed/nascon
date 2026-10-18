@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { bodyHash } from '../../core/crypto';
-import { notFound, validation } from '../../core/errors';
+import { conflict, notFound, validation } from '../../core/errors';
 import { checkTransferRules } from './rules';
 import { idSchema, parse } from '../../core/validate';
 
@@ -188,4 +188,29 @@ export async function history(c: PoolClient, playerId: string, asOfRaw: unknown)
   const reg = (await c.query('SELECT * FROM roster_regs WHERE player_id=$1', [playerId])).rows[0];
   const rows = (await c.query('SELECT * FROM roster_audit WHERE player_id=$1 ORDER BY seq', [playerId])).rows;
   return { player_id: playerId, as_of: asOf, league_id: pl.rows[0].league_id, current_squad_id: reg?.squad_id ?? null, parent_squad_id: reg?.parent_squad_id ?? null, history: rows.map(auditView) };
+}
+
+const addSchema = z.object({ player_id: idSchema, name: z.string().min(1).max(120), position: z.string().min(1).max(40), squad_id: idSchema, role: z.enum(ROLES).optional() });
+
+/** FR-2.2: a club manager registers a new player into one of the club's squads. */
+export async function addPlayer(c: PoolClient, clubId: string, rawBody: unknown, who: string) {
+  const b = parse(addSchema, rawBody);
+  const s = await c.query('SELECT s.league_id, l.max_squad_size FROM roster_squads s JOIN roster_leagues l ON l.league_id=s.league_id WHERE s.squad_id=$1 AND s.club_id=$2 LIMIT 1', [b.squad_id, clubId]);
+  if (!s.rowCount) throw notFound('SQUAD_NOT_FOUND', `Squad ${b.squad_id} not found.`, { squad_id: b.squad_id });
+  const { league_id, max_squad_size } = s.rows[0];
+  await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['roster:' + league_id]);
+  if ((await c.query('SELECT 1 FROM roster_players WHERE player_id=$1', [b.player_id])).rowCount)
+    throw conflict('PLAYER_ALREADY_REGISTERED', `Player ${b.player_id} is already registered.`, { player_id: b.player_id });
+  const n = Number((await c.query('SELECT count(*)::int AS n FROM roster_regs WHERE league_id=$1 AND squad_id=$2', [league_id, b.squad_id])).rows[0].n);
+  if (n + 1 > max_squad_size) throw conflict('SQUAD_FULL', 'The destination squad is full.', { squad_id: b.squad_id });
+  const role = b.role ?? 'substitute';
+  const eff = today();
+  await c.query('INSERT INTO roster_players VALUES ($1,$2,$3,$4)', [b.player_id, league_id, b.name, b.position]);
+  await c.query('INSERT INTO roster_regs(player_id, league_id, squad_id, role, start_date) VALUES ($1,$2,$3,$4,$5)', [b.player_id, league_id, b.squad_id, role, eff]);
+  const audit_id = await writeAudit(c, { player_id: b.player_id, league_id, action: 'register', from: null, to: b.squad_id, eff, who, why: 'Registered by club manager', state: 'active' });
+  const entry = (await c.query('SELECT * FROM roster_audit WHERE audit_id=$1', [audit_id])).rows[0];
+  return {
+    registration: { player_id: b.player_id, name: b.name, position: b.position, league_id, squad_id: b.squad_id, club_id: clubId, role, start_date: eff },
+    audit_entry: auditView(entry),
+  };
 }

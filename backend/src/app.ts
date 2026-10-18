@@ -10,7 +10,7 @@ import { createSport, listSports } from './features/sports/service';
 import { generateFixtures } from './features/fixtures';
 import { createLeague, getStandings } from './features/standings/service';
 import { appendEvent, getScore } from './features/events/service';
-import { history, setupRoster, transfer, rosterVersion } from './features/roster/service';
+import { addPlayer, history, setupRoster, transfer, rosterVersion } from './features/roster/service';
 import { checkout, inventory } from './features/store/service';
 import { authenticate, mintToken, probe, rbacMatrix } from './features/rbac/service';
 import { offlineSync } from './features/offline/service';
@@ -410,6 +410,13 @@ export function buildApp(): FastifyInstance {
   app.get(`${V}/roster/history/:id`, async (req) => {
     auth(req);
     return tx((c) => history(c, (req.params as any).id, q(req).as_of));
+  });
+
+  app.post(`${V}/roster/:club_id/players`, async (req, reply) => {
+    const u = auth(req);
+    const club = (req.params as any).club_id as string;
+    if (u.role !== 'super_admin' && !(u.role === 'club_manager' && u.club_id === club)) throw forbidden();
+    return reply.status(201).send(await tx((c) => addPlayer(c, club, req.body, u.sub)));
   });
 
   app.get(`${V}/roster/:club_id`, async (req) => {
