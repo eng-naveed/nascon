@@ -5,7 +5,10 @@
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "multisport",
+    "scheme": [
+      "nascon",
+      "multisport"
+    ],
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "io.nascon.multisport",
@@ -23,7 +26,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "io.nascon.multisport"
+      "package": "io.nascon.multisport",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -47,6 +55,15 @@
           "android": {
             "usesCleartextTraffic": true
           }
+        }
+      ],
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "NaSCon uses the camera to scan match QR codes and to broadcast live.",
+          "microphonePermission": "NaSCon uses the microphone when you broadcast live.",
+          "recordAudioAndroid": true
         }
       ]
     ],
