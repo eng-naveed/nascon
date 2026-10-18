@@ -114,11 +114,11 @@ const authSchema = z.object({
 /**
  * MediaMTX `authMethod: http` callback. 2xx allows. `live/{key}`: publish and read need an active key
  * (revoked or rotated -> 409 KEY_REVOKED, unknown -> 404 STREAM_NOT_FOUND). `costream/{id}`: read needs an
- * existing session; publish is the compositor's (needs MEDIA_PUBLISH_SECRET as password when configured).
+ * existing session (`match/{id}`: an existing match); publish is the compositor's (needs MEDIA_PUBLISH_SECRET as password when configured).
  */
 export async function mediaAuth(rawBody: unknown, publishSecret = process.env.MEDIA_PUBLISH_SECRET ?? '') {
   const b = parse(authSchema, rawBody);
-  const m = /^(live|costream)\/([^/]+)$/.exec(b.path);
+  const m = /^(live|costream|match)\/([^/]+)$/.exec(b.path);
   if (!m || !['publish', 'read', 'playback'].includes(b.action)) throw new AppError(401, 'UNAUTHENTICATED', 'Not a media path this server authorises.');
   const [, kind, id] = m;
   if (kind === 'live') {
@@ -127,8 +127,12 @@ export async function mediaAuth(rawBody: unknown, publishSecret = process.env.ME
     if (r.rows[0].status !== 'active') throw conflict('KEY_REVOKED', 'This stream key has been revoked.', { stream_key: id });
     return { allowed: true };
   }
-  const s = await pool.query('SELECT status FROM costream_sessions WHERE session_id=$1', [id]);
-  if (!s.rowCount) throw notFound('STREAM_NOT_FOUND', 'Unknown co-stream session.', { session_id: id });
-  if (b.action === 'publish' && publishSecret && b.password !== publishSecret) throw new AppError(401, 'UNAUTHENTICATED', 'Only the compositor may publish a co-stream.');
+  // match/{id}: the venue feed shown on the guest live page; costream/{id}: the composite
+  const s =
+    kind === 'match'
+      ? await pool.query('SELECT 1 FROM matches WHERE match_id=$1', [id])
+      : await pool.query('SELECT status FROM costream_sessions WHERE session_id=$1', [id]);
+  if (!s.rowCount) throw notFound('STREAM_NOT_FOUND', `Unknown ${kind === 'match' ? 'match' : 'co-stream session'}.`, { [kind === 'match' ? 'match_id' : 'session_id']: id });
+  if (b.action === 'publish' && publishSecret && b.password !== publishSecret) throw new AppError(401, 'UNAUTHENTICATED', 'Only the compositor may publish this feed.');
   return { allowed: true };
 }

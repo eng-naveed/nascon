@@ -27,7 +27,9 @@ import { mediaAuth, streamKey } from './features/day2/streaming/service';
 import { costreamSession } from './features/day2/costream/service';
 import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
 import { realtime } from './features/day2/observability/realtime';
+import { publish } from './features/day2/observability/bus';
 import websocket from '@fastify/websocket';
+import { webRoutes } from './features/day2/web/pages';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
@@ -124,6 +126,8 @@ export function buildApp(): FastifyInstance {
   // ---- realtime: WebSocket + SSE fan-out (Phase II observability) ----
   app.register(websocket, { options: { maxPayload: 64 * 1024 } });
   app.register(realtime, { authenticate: authHeader, onBroadcaster });
+  // ---- guest web player (spec 6.2.2) ----
+  app.register(webRoutes);
   const q = (req: FastifyRequest) => (req.query ?? {}) as Record<string, string>;
   const send = (reply: FastifyReply, r: { status: number; body: unknown }) => reply.status(r.status).send(r.body);
 
@@ -333,6 +337,7 @@ export function buildApp(): FastifyInstance {
     if (!v.rowCount) throw notFound('VARIANT_NOT_FOUND', 'Variant not found.', { variant_id: b.variant_id });
     const r = await pool.query('UPDATE matches SET showcase=$2 WHERE match_id=$1', [id, JSON.stringify({ variant_id: b.variant_id, product_name: v.rows[0].name, price_minor: v.rows[0].price_minor })]);
     if (!r.rowCount) throw notFound('MATCH_NOT_FOUND', 'Match not found.', { match_id: id });
+    publish(`match:${id}`, { type: 'match.showcase', match_id: id });
     return { status: 'pinned' };
   });
 

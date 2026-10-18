@@ -57,7 +57,9 @@ export function broadcast(topic: string, payload: object): number {
 /** Live score snapshot pushed on connect and after every committed match event. */
 export async function scoreMessage(matchId: string) {
   const s = await getScore(pool, matchId);
-  return { type: 'score', match_id: matchId, score: s };
+  // the pinned merchandise overlay (FR-3.2) travels with the score, so re-pinning updates every viewer live
+  const m = await pool.query('SELECT showcase FROM matches WHERE match_id=$1', [matchId]);
+  return { type: 'score', match_id: matchId, score: s, showcase: m.rows[0]?.showcase ?? null };
 }
 
 subscribe(ALL, async (e: BusEvent, topic: string) => {
