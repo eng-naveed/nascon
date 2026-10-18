@@ -17,6 +17,7 @@ services:
     build: ./backend
     environment:
       DAY1_SALT: ${DAY1_SALT}
+      DAY2_SALT: ${DAY2_SALT}
       DATABASE_URL: postgres://nascon:nascon@db:5432/nascon
       PORT: "8080"
     ports:

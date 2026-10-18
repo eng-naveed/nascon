@@ -112,8 +112,9 @@ export function buildApp(): FastifyInstance {
   // ---- health ----
   app.get('/health', async (_req, reply) => {
     const h = await runHealth({
-      // DB up AND baseline seed present (Phase II markers included).
-      db: async () => !(await needsBaselineSeed(pool)),
+      db: async () => (await pool.query('SELECT 1')).rowCount === 1,
+      // Baseline seed present (Phase II markers included); reported separately from DB reachability.
+      seed: async () => !(await needsBaselineSeed(pool)),
       redisUrl: config.redisUrl,
       mediaApiUrl: config.mediaApiUrl,
     });
