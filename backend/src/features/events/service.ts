@@ -5,12 +5,12 @@ import { bodyHash, sign } from '../../core/crypto';
 import { AppError, conflict, notFound, validation } from '../../core/errors';
 import { idSchema, parse } from '../../core/validate';
 import { getSport } from '../sports/service';
-import { MatchMeta, SCORABLE, StoredEvent, project } from './projection';
+import { MatchMeta, SCORABLE, STATUS_EVENT_TYPES, StoredEvent, project, statusFromEvent } from './projection';
 
 const envelope = z.object({
   event_id: idSchema,
   match_id: idSchema,
-  type: z.enum(['match_init', 'match_start', 'score', 'discipline', 'tiebreak_winner', 'match_end', 'compensation']),
+  type: z.enum(['match_init', 'match_start', 'score', 'discipline', 'tiebreak_winner', 'match_end', 'compensation', ...(STATUS_EVENT_TYPES as [string, ...string[]])]),
   payload: z.record(z.string(), z.any()).optional(),
 });
 const team = idSchema;
@@ -22,7 +22,9 @@ const payloads: Record<string, z.ZodTypeAny> = {
   tiebreak_winner: z.object({ team_id: team }),
   match_end: z.object({}),
   compensation: z.object({ compensates: idSchema, reason: z.string().max(500).optional() }),
+  status_change: z.object({ status: z.enum(['postponed', 'cancelled', 'abandoned']), reason: z.string().max(500).optional() }),
 };
+for (const t of STATUS_EVENT_TYPES) if (!payloads[t]) payloads[t] = z.object({ reason: z.string().max(500).optional() });
 
 export async function loadEvents(db: Pick<PoolClient, 'query'>, matchId: string): Promise<StoredEvent[]> {
   const r = await db.query('SELECT seq, event_id, type, payload, signature FROM events WHERE match_id=$1 ORDER BY seq', [matchId]);
@@ -98,6 +100,10 @@ export async function appendEvent(c: PoolClient, rawBody: unknown): Promise<{ st
       if (view.status !== 'in_progress') throw conflict('ILLEGAL_TRANSITION', `Cannot end a match that is ${view.status}.`, { status: view.status });
       if (view.home.score === view.away.score && !sport.draw_allowed && !view.tiebreak_winner_team_id)
         throw conflict('TIE_NOT_ALLOWED', 'The score is level and draws are not allowed.', { match_id: body.match_id });
+    } else if (statusFromEvent({ type: body.type, payload: pl })) {
+      // postponed / cancelled / abandoned: only a match that is still upcoming or in progress can be moved there
+      if (view.status !== 'upcoming' && view.status !== 'in_progress')
+        throw conflict('ILLEGAL_TRANSITION', `Cannot change the status of a match that is ${view.status}.`, { status: view.status });
     } else if (body.type === 'compensation') {
       const t = await c.query('SELECT match_id, type, event_id FROM events WHERE event_id=$1', [pl.compensates]);
       if (!t.rowCount) throw notFound('EVENT_NOT_FOUND', `Event ${pl.compensates} not found.`, { event_id: pl.compensates });

@@ -37,6 +37,26 @@ export interface TeamView {
 
 export const SCORABLE = ['score', 'discipline', 'tiebreak_winner'];
 
+export type MatchStatus = 'upcoming' | 'in_progress' | 'completed' | 'postponed' | 'cancelled' | 'abandoned';
+
+/** Phase II status transitions. Day 1 had no event for these; several spellings are accepted. */
+const STATUS_ALIAS: Record<string, MatchStatus> = {
+  match_postpone: 'postponed', match_postponed: 'postponed', postpone: 'postponed', postponed: 'postponed',
+  match_cancel: 'cancelled', match_cancelled: 'cancelled', cancel: 'cancelled', cancelled: 'cancelled',
+  match_abandon: 'abandoned', match_abandoned: 'abandoned', abandon: 'abandoned', abandoned: 'abandoned',
+};
+export const STATUS_EVENT_TYPES = [...Object.keys(STATUS_ALIAS).filter((k) => k.startsWith('match_') || !k.endsWith('ed')), 'status_change'];
+export const NON_PLAYING_STATUSES = ['postponed', 'cancelled', 'abandoned'] as const;
+
+/** The status a status-changing event moves the match to, or null if the event does not change status that way. */
+export function statusFromEvent(e: { type: string; payload?: any }): MatchStatus | null {
+  if (e.type === 'status_change') {
+    const v = String(e.payload?.status ?? '');
+    return Object.hasOwn(STATUS_ALIAS, v) ? STATUS_ALIAS[v] : null;
+  }
+  return Object.hasOwn(STATUS_ALIAS, e.type) ? STATUS_ALIAS[e.type] : null;
+}
+
 export function compensationMap(events: StoredEvent[]): Map<string, string> {
   const m = new Map<string, string>();
   for (const e of events) if (e.type === 'compensation' && !m.has(e.payload.compensates)) m.set(e.payload.compensates, e.event_id);
@@ -45,7 +65,7 @@ export function compensationMap(events: StoredEvent[]): Map<string, string> {
 
 export function project(sport: SportConfig, meta: MatchMeta, events: StoredEvent[]) {
   const comp = compensationMap(events);
-  let status: 'upcoming' | 'in_progress' | 'completed' = 'upcoming';
+  let status: MatchStatus = 'upcoming';
   const teams: Record<string, { score: number; wickets: number; balls: number; fair: number }> = {
     [meta.home_team_id]: { score: 0, wickets: 0, balls: 0, fair: 0 },
     [meta.away_team_id]: { score: 0, wickets: 0, balls: 0, fair: 0 },
@@ -54,6 +74,10 @@ export function project(sport: SportConfig, meta: MatchMeta, events: StoredEvent
   for (const e of events) {
     if (e.type === 'match_start') status = 'in_progress';
     else if (e.type === 'match_end') status = 'completed';
+    else {
+      const moved = statusFromEvent(e);
+      if (moved) status = moved;
+    }
     if (comp.has(e.event_id) || e.type === 'compensation') continue;
     const t = teams[e.payload?.team_id];
     if (e.type === 'score' && t) {
