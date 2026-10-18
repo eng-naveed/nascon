@@ -23,6 +23,8 @@ import { issueGuestSession } from './features/day2/qr_guest/guest';
 import { clearErased, eraseUser, isErased } from './features/day2/qr_guest/privacy';
 import { clearQrCache, getQr, qrEntry, render, resolveShortCode, scanStats } from './features/day2/qr_guest/qr';
 import { qrPdf, qrPng, qrSvg } from './features/day2/qr_guest/render';
+import { mediaAuth, streamKey } from './features/day2/streaming/service';
+import { costreamSession } from './features/day2/costream/service';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
@@ -216,6 +218,11 @@ export function buildApp(): FastifyInstance {
     return reply.status(302).header('location', to).header('cache-control', 'no-store').send();
   });
   app.post(`${A}/guest/cart-merge`, async (req) => cartMerge(req.body));
+  // ---- creator streaming + co-streams (Phase II streaming / costream) ----
+  app.post(`${A}/stream/key`, async (req, reply) => send(reply, await streamKey(req.body)));
+  app.post(`${A}/costream/session`, async (req, reply) => send(reply, await costreamSession(req.body)));
+  // MediaMTX authMethod: http callback (compose network only; not under /api/v1, so never rate limited)
+  app.post('/internal/media/auth', async (req) => mediaAuth(req.body));
   app.delete(`${A}/privacy/user/:id`, async (req) => eraseUser((req.params as any).id));
 
   const probes: [string, string, string, string?][] = [
