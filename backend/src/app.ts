@@ -17,6 +17,7 @@ import { offlineSync } from './features/offline/service';
 import { getOrder, listQueue, transitionOrder } from './features/orders/service';
 import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metrics';
 import { runHealth } from './core/health';
+import { followers, setFollow } from './features/day2/athletes/follow';
 import { guestWriteRejection } from './features/day2/common';
 import { cartMerge } from './features/day2/qr_guest/cart';
 import { issueGuestSession } from './features/day2/qr_guest/guest';
@@ -27,6 +28,7 @@ import { mediaAuth, streamKey } from './features/day2/streaming/service';
 import { costreamSession } from './features/day2/costream/service';
 import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
 import { realtime } from './features/day2/observability/realtime';
+import { playerProfile } from './features/day2/athletes/profile';
 import { publish } from './features/day2/observability/bus';
 import { ntfyTopic } from './features/day2/observability/ntfy';
 import websocket from '@fastify/websocket';
@@ -263,6 +265,8 @@ export function buildApp(): FastifyInstance {
     const u = auth(req);
     return { ntfy_port: 8090, topics: [u.sub, ...(u.player_id ? [u.player_id] : [])].map(ntfyTopic) };
   });
+  // athlete profile (FR-3.1): public, read-only
+  app.get(`${V}/players/:id/profile`, async (req) => playerProfile((req.params as any).id));
   // ---- co-stream live controls (FR-3.3) ----
   app.post(`${V}/costream/:id/invites`, async (req, reply) => reply.status(201).send(await invite(auth(req), (req.params as any).id, req.body)));
   app.post(`${V}/costream/:id/join`, async (req) => join(auth(req), (req.params as any).id, req.body));
@@ -271,6 +275,10 @@ export function buildApp(): FastifyInstance {
     auth(req);
     return scanStats((req.params as any).id);
   });
+  // ---- athlete follow/unfollow (FR-3.1): idempotent per (follower, athlete), count derived from rows ----
+  app.post(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, true));
+  app.delete(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, false));
+  app.get(`${V}/players/:id/followers`, async (req) => followers((req.params as any).id));
   // ---- live audience chat (Phase II): guests read, members write ----
   app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
   app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));

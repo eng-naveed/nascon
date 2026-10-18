@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS dlq_events (
   id bigserial PRIMARY KEY, chat_room_id text NOT NULL, event_id text NOT NULL, attempts int NOT NULL, status text NOT NULL DEFAULT 'dead',
   reason text, created_at timestamptz NOT NULL DEFAULT now());
 CREATE TABLE IF NOT EXISTS erased_users (user_id text PRIMARY KEY, erased_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS follows (follower_id text NOT NULL, athlete_id text NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (follower_id, athlete_id));
 `;
 
 
