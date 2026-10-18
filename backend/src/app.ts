@@ -28,6 +28,7 @@ import { mediaAuth, streamKey } from './features/day2/streaming/service';
 import { costreamSession } from './features/day2/costream/service';
 import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
 import { realtime } from './features/day2/observability/realtime';
+import { playerProfile } from './features/day2/athletes/profile';
 import { publish } from './features/day2/observability/bus';
 import { ntfyTopic } from './features/day2/observability/ntfy';
 import websocket from '@fastify/websocket';
@@ -264,6 +265,8 @@ export function buildApp(): FastifyInstance {
     const u = auth(req);
     return { ntfy_port: 8090, topics: [u.sub, ...(u.player_id ? [u.player_id] : [])].map(ntfyTopic) };
   });
+  // athlete profile (FR-3.1): public, read-only
+  app.get(`${V}/players/:id/profile`, async (req) => playerProfile((req.params as any).id));
   // ---- co-stream live controls (FR-3.3) ----
   app.post(`${V}/costream/:id/invites`, async (req, reply) => reply.status(201).send(await invite(auth(req), (req.params as any).id, req.body)));
   app.post(`${V}/costream/:id/join`, async (req) => join(auth(req), (req.params as any).id, req.body));
