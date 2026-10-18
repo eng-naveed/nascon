@@ -18,6 +18,7 @@ import { getOrder, listQueue, transitionOrder } from './features/orders/service'
 import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metrics';
 import { runHealth } from './core/health';
 import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT } from './features/day2/common';
+import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 
 const hits = new Map<string, number[]>();
 function rateLimit(ip: string) {
@@ -152,7 +153,9 @@ export function buildApp(): FastifyInstance {
     const b = parse(z.object({ seed: z.number().int().optional(), stock: z.record(z.string(), z.number().int().min(0).max(1000000)).optional() }), req.body);
     for (let attempt = 0; ; attempt++) {
       try {
-        return await tx((c) => resetAndSeed(c, b));
+        const r = await tx((c) => resetAndSeed(c, b));
+        clearModerationCache();
+        return r;
       } catch (e: any) {
         if (attempt < 4 && (e?.code === '40P01' || e?.code === '40001')) {
           await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
@@ -178,6 +181,7 @@ export function buildApp(): FastifyInstance {
   app.get(`${A}/inventory/:id`, async (req) => inventory((req.params as any).id));
   app.post(`${A}/rbac-matrix`, async () => rbacMatrix());
   app.post(`${A}/offline-sync`, async (req) => offlineSync(req.body));
+  app.post(`${A}/moderation/test`, async (req) => moderationProbe(req.body));
 
   const probes: [string, string, string, string?][] = [
     ['post', '/rbac/tenants', 'tenants'],
