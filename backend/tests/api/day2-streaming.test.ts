@@ -63,13 +63,40 @@ describe('POST /audit/v1/stream/key (spec 5.4)', () => {
     expect([f.status, f.body.error.code]).toEqual([404, 'STREAM_NOT_FOUND']);
   });
 
-  it('a re-used override never 500s: same player refreshes it, another player takes it over', async () => {
+  it('a re-used override never 500s: the same player refreshes its own key (Appendix A vectors re-sent)', async () => {
     expect((await key({ ...VEC, action: 'generate' })).status).toBe(201);
-    expect((await key({ ...VEC, action: 'generate' })).status).toBe(201);
-    const other = await key({ ...VEC, player_id: 'player-beta-1' });
-    expect([other.status, other.body.player_id]).toEqual([200, 'player-beta-1']);
+    const again = await key({ ...VEC, action: 'generate' });
+    expect([again.status, again.body.status, again.body.signature]).toEqual([201, 'active', ksig(VEC.stream_key_override, 'generate', 'player-alpha-1', 'active')]);
+    const rot = await key(VEC);
+    expect([rot.status, rot.body.stream_key]).toEqual([200, VEC.stream_key_override]);
     const r = await ctx.db.pool.query("SELECT player_id, status FROM stream_keys WHERE stream_key='sk_live_9f83a1b2c3d4e5f6'");
-    expect(r.rows).toEqual([{ player_id: 'player-beta-1', status: 'active' }]);
+    expect(r.rows).toEqual([{ player_id: 'player-alpha-1', status: 'active' }]);
+  });
+
+  it("another player's override is 409 STREAM_KEY_CONFLICT and the owner keeps its key", async () => {
+    const k = 'sk_live_aaaaaaaaaaaaaaaa';
+    expect((await key({ action: 'rotate', player_id: 'player-alpha-1', stream_key_override: k })).status).toBe(200);
+    const theirs = await key({ action: 'generate', player_id: 'player-beta-1' });
+    const r = await key({ action: 'rotate', player_id: 'player-beta-1', stream_key_override: k });
+    expect([r.status, r.body.error.code, r.body.error.details]).toEqual([409, 'STREAM_KEY_CONFLICT', { stream_key: k }]);
+    // the failed takeover rolled back: beta's own key is untouched and alpha can still revoke its key
+    expect(await status(theirs.body.stream_key)).toBe('active');
+    const rev = await key({ action: 'revoke', player_id: 'player-alpha-1' });
+    expect([rev.status, rev.body.stream_key, rev.body.status]).toEqual([200, k, 'revoked']);
+    // a revoked key still belongs to its player
+    expect((await key({ action: 'rotate', player_id: 'player-beta-1', stream_key_override: k })).status).toBe(409);
+  });
+
+  it('two players racing for the same new override: exactly one owns it, the other gets 409', async () => {
+    const k = 'sk_live_race0000race0000';
+    const rs = await Promise.all(['player-alpha-1', 'player-beta-1', 'player-alpha-1', 'player-beta-1'].map((p) => key({ action: 'rotate', player_id: p, stream_key_override: k })));
+    const owner = (await ctx.db.pool.query('SELECT player_id FROM stream_keys WHERE stream_key=$1', [k])).rows;
+    expect(owner).toHaveLength(1);
+    for (const r of rs) {
+      if (r.status === 200) expect(r.body.player_id).toBe(owner[0].player_id);
+      else expect([r.status, r.body.error.code]).toEqual([409, 'STREAM_KEY_CONFLICT']);
+    }
+    expect(rs.filter((r) => r.status === 200)).toHaveLength(2);
   });
 
   it('10 concurrent rotates leave exactly one active key', async () => {
