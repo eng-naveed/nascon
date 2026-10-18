@@ -37,23 +37,33 @@ export async function checkMedia(baseUrl: string, timeoutMs = 500): Promise<bool
 
 export interface HealthDeps {
   db: () => Promise<boolean>;
+  /** Baseline seed present; only probed (and reported) when given and the database is up. */
+  seed?: () => Promise<boolean>;
   redisUrl?: string;
   mediaApiUrl?: string;
 }
 
 export interface HealthResult {
   ok: boolean;
-  checks: Record<string, 'ok' | 'down' | 'skipped'>;
+  checks: Record<string, 'ok' | 'down' | 'skipped' | 'missing'>;
 }
 
-/** Probes the database always, and Redis / the media server only when they are configured. */
+/** Probes the database always, the seed once the database answers, and Redis / the media server only when configured. */
 export async function runHealth(deps: HealthDeps): Promise<HealthResult> {
-  const [db, redis, media] = await Promise.all([
-    deps.db().catch(() => false),
+  const dbAndSeed = async (): Promise<[boolean, boolean | null]> => {
+    const up = await deps.db().catch(() => false);
+    if (!up || !deps.seed) return [up, null];
+    return [up, await deps.seed().catch(() => false)];
+  };
+  const [[db, seed], redis, media] = await Promise.all([
+    dbAndSeed(),
     deps.redisUrl ? checkRedis(deps.redisUrl) : Promise.resolve(null),
     deps.mediaApiUrl ? checkMedia(deps.mediaApiUrl) : Promise.resolve(null),
   ]);
   const tag = (v: boolean | null) => (v === null ? 'skipped' : v ? 'ok' : 'down');
-  const checks = { db: tag(db), redis: tag(redis), media: tag(media) } as HealthResult['checks'];
-  return { ok: db && redis !== false && media !== false, checks };
+  const checks: HealthResult['checks'] = { db: tag(db) };
+  if (deps.seed) checks.seed = seed === null ? 'skipped' : seed ? 'ok' : 'missing';
+  checks.redis = tag(redis);
+  checks.media = tag(media);
+  return { ok: db && seed !== false && redis !== false && media !== false, checks };
 }

@@ -192,12 +192,14 @@ describe('extended /health', () => {
     const r = await ctx.app.inject({ method: 'GET', url: '/health' });
     expect(r.statusCode).toBe(503);
     expect(JSON.parse(r.body)).toEqual({ status: 'unavailable' });
-    expect(JSON.parse(r.headers['x-health-checks'] as string)).toEqual({ db: 'down', redis: 'skipped', media: 'skipped' });
+    expect(JSON.parse(r.headers['x-health-checks'] as string)).toEqual({ db: 'ok', seed: 'missing', redis: 'skipped', media: 'skipped' });
     await ctx.reset();
   });
   it('503 on a Day 1 volume that lacks the Phase II baseline (match-m1 / QR m1-live)', async () => {
     await ctx.db.pool.query("DELETE FROM qr_codes WHERE short_code='m1-live'");
-    expect((await call(ctx.app, 'GET', '/health')).status).toBe(503);
+    const r = await ctx.app.inject({ method: 'GET', url: '/health' });
+    expect([r.statusCode, JSON.parse(r.body)]).toEqual([503, { status: 'unavailable' }]);
+    expect(JSON.parse(r.headers['x-health-checks'] as string)).toMatchObject({ db: 'ok', seed: 'missing' });
     await ctx.reset();
     await ctx.db.pool.query("DELETE FROM matches WHERE match_id='match-m1'");
     expect((await call(ctx.app, 'GET', '/health')).status).toBe(503);

@@ -101,6 +101,10 @@ describe('health probes', () => {
     expect((await runHealth({ db: async () => false })).ok).toBe(false);
     expect((await runHealth({ db: async () => { throw new Error('x'); } })).checks.db).toBe('down');
     expect(await runHealth({ db: async () => true, redisUrl, mediaApiUrl: httpUrl })).toEqual({ ok: true, checks: { db: 'ok', redis: 'ok', media: 'ok' } });
+    expect(await runHealth({ db: async () => true, seed: async () => true })).toEqual({ ok: true, checks: { db: 'ok', seed: 'ok', redis: 'skipped', media: 'skipped' } });
+    expect(await runHealth({ db: async () => true, seed: async () => false })).toEqual({ ok: false, checks: { db: 'ok', seed: 'missing', redis: 'skipped', media: 'skipped' } });
+    expect(await runHealth({ db: async () => true, seed: async () => { throw new Error('x'); } })).toMatchObject({ ok: false, checks: { db: 'ok', seed: 'missing' } });
+    expect(await runHealth({ db: async () => false, seed: async () => true })).toMatchObject({ ok: false, checks: { db: 'down', seed: 'skipped' } });
     const down = await runHealth({ db: async () => true, redisUrl: `redis://127.0.0.1:${closedPort}`, mediaApiUrl: httpUrl });
     expect(down).toEqual({ ok: false, checks: { db: 'ok', redis: 'down', media: 'ok' } });
   });
