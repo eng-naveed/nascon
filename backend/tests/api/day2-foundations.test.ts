@@ -160,6 +160,56 @@ describe('postponed / cancelled / abandoned (edge case 2 prerequisites)', () => 
     expect((await ev(uniq('e'), id, 'status_change', {})).status).toBe(400);
   });
 
+  it.each([
+    ['match_rescheduled', {}],
+    ['match_reschedule', {}],
+    ['status_change', { status: 'upcoming' }],
+    ['status_update', { status: 'upcoming' }],
+    ['match_status', { status: 'upcoming' }],
+    ['set_status', { status: 'upcoming' }],
+  ])('%s moves a postponed match back to upcoming, and it can then be played', async (type, payload) => {
+    const id = uniq('m');
+    await init(id);
+    await ev(uniq('e'), id, 'match_start');
+    await ev(uniq('e'), id, 'match_postponed');
+    expect((await ev(uniq('e'), id, type, payload)).status).toBe(201);
+    expect(await status(id)).toBe('upcoming');
+    expect((await ev(uniq('e'), id, 'match_start')).status).toBe(201);
+    expect((await ev(uniq('e'), id, 'match_end')).status).toBe(201);
+    expect(await status(id)).toBe('completed');
+  });
+
+  it('rescheduling is 409 from any status other than postponed; cancelled / abandoned / completed stay terminal', async () => {
+    const cases: [string, string[]][] = [
+      ['upcoming', []],
+      ['in_progress', ['match_start']],
+      ['completed', ['match_start', 'match_end']],
+      ['cancelled', ['match_cancelled']],
+      ['abandoned', ['match_start', 'match_abandoned']],
+    ];
+    for (const [from, setup] of cases) {
+      const id = uniq('m');
+      await init(id);
+      for (const t of setup) expect((await ev(uniq('e'), id, t)).status).toBe(201);
+      for (const [type, payload] of [['match_rescheduled', {}], ['status_change', { status: 'upcoming' }]] as const) {
+        const r = await ev(uniq('e'), id, type, payload);
+        expect([from, r.status, r.body.error.code]).toEqual([from, 409, 'ILLEGAL_TRANSITION']);
+      }
+      expect(await status(id)).toBe(from);
+    }
+  });
+
+  it('an invalid target status is a 400 naming the status field', async () => {
+    const id = uniq('m');
+    await init(id);
+    await ev(uniq('e'), id, 'match_postponed');
+    const bad = await ev(uniq('e'), id, 'set_status', { status: 'rescheduled-ish' });
+    expect([bad.status, bad.body.error.code]).toEqual([400, 'VALIDATION_ERROR']);
+    expect(bad.body.error.details.fields).toEqual(['status']);
+    expect((await ev(uniq('e'), id, 'upcoming')).status).toBe(400);
+    expect(await status(id)).toBe('postponed');
+  });
+
   it('match-m1 can be completed or postponed by the grader (edge case 2 inputs)', async () => {
     await ctx.reset();
     expect((await ev('g-end', 'match-m1', 'match_end')).status).toBe(201);

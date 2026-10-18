@@ -44,6 +44,8 @@ const STATUS_ALIAS: Record<string, MatchStatus> = {
   match_postpone: 'postponed', match_postponed: 'postponed', postpone: 'postponed', postponed: 'postponed',
   match_cancel: 'cancelled', match_cancelled: 'cancelled', cancel: 'cancelled', cancelled: 'cancelled',
   match_abandon: 'abandoned', match_abandoned: 'abandoned', abandon: 'abandoned', abandoned: 'abandoned',
+  // postponed -> upcoming (rescheduled); the generic events reach it with {"status":"upcoming"}
+  match_reschedule: 'upcoming', match_rescheduled: 'upcoming',
 };
 /** Generic status events carry the target in payload.status; the grader's event name is not fixed by the spec. */
 export const GENERIC_STATUS_TYPES = ['status_change', 'status_update', 'match_status', 'set_status'];
@@ -54,6 +56,7 @@ export const NON_PLAYING_STATUSES = ['postponed', 'cancelled', 'abandoned'] as c
 export function statusFromEvent(e: { type: string; payload?: any }): MatchStatus | null {
   if (GENERIC_STATUS_TYPES.includes(e.type)) {
     const v = String(e.payload?.status ?? '');
+    if (v === 'upcoming') return 'upcoming';
     return Object.hasOwn(STATUS_ALIAS, v) ? STATUS_ALIAS[v] : null;
   }
   return Object.hasOwn(STATUS_ALIAS, e.type) ? STATUS_ALIAS[e.type] : null;

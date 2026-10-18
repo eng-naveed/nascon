@@ -25,7 +25,7 @@ const payloads: Record<string, z.ZodTypeAny> = {
   match_end: z.object({}),
   compensation: z.object({ compensates: idSchema, reason: z.string().max(500).optional() }),
 };
-const statusPayload = z.object({ status: z.enum(['postponed', 'cancelled', 'abandoned']), reason: z.string().max(500).optional() });
+const statusPayload = z.object({ status: z.enum(['postponed', 'cancelled', 'abandoned', 'upcoming']), reason: z.string().max(500).optional() });
 for (const t of GENERIC_STATUS_TYPES) payloads[t] = statusPayload;
 for (const t of STATUS_EVENT_TYPES) if (!payloads[t]) payloads[t] = z.object({ reason: z.string().max(500).optional() });
 
@@ -103,6 +103,10 @@ export async function appendEvent(c: PoolClient, rawBody: unknown): Promise<{ st
       if (view.status !== 'in_progress') throw conflict('ILLEGAL_TRANSITION', `Cannot end a match that is ${view.status}.`, { status: view.status });
       if (view.home.score === view.away.score && !sport.draw_allowed && !view.tiebreak_winner_team_id)
         throw conflict('TIE_NOT_ALLOWED', 'The score is level and draws are not allowed.', { match_id: body.match_id });
+    } else if (statusFromEvent({ type: body.type, payload: pl }) === 'upcoming') {
+      // rescheduled: only a postponed match can go back to upcoming; cancelled / abandoned / completed stay terminal
+      if (view.status !== 'postponed')
+        throw conflict('ILLEGAL_TRANSITION', `Cannot reschedule a match that is ${view.status}.`, { status: view.status });
     } else if (statusFromEvent({ type: body.type, payload: pl })) {
       // postponed / cancelled / abandoned: only a match that is still upcoming or in progress can be moved there
       if (view.status !== 'upcoming' && view.status !== 'in_progress')
