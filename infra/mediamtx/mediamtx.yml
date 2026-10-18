@@ -56,3 +56,13 @@ paths:
       -c:a aac -b:a 64k -f rtsp -rtsp_transport tcp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnDemandStartTimeout: 10s
     runOnDemandCloseAfter: 15s
+
+  # Venue feed of a match (guest live page). Placeholder until the venue camera / compositor publishes.
+  "~^match/[A-Za-z0-9_.:-]+$":
+    runOnDemand: >-
+      ffmpeg -hide_banner -loglevel error -re
+      -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i sine=frequency=550:sample_rate=48000
+      -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -b:v 1500k
+      -c:a aac -b:a 64k -f rtsp -rtsp_transport tcp rtsp://localhost:$RTSP_PORT/$MTX_PATH
+    runOnDemandStartTimeout: 10s
+    runOnDemandCloseAfter: 15s
