@@ -81,9 +81,7 @@
       }
     },
     "owner": "nascon",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/36b54684-eb1b-488c-9ba2-271ad88994d7",
       "enabled": false
