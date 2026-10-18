@@ -4,20 +4,24 @@
  */
 
 const ZERO_WIDTH = /[​-‍⁠﻿]/g;
-const LEET: Record<string, string> = { '@': 'a', '0': 'o', '1': 'i', '3': 'e', $: 's' };
+const LEET: Record<string, string> = { '@': 'a', '0': 'o', '1': 'i', '3': 'e', '5': 's', $: 's' };
+/** Cyrillic look-alikes of Latin letters (lowercase; the token is lowercased first). */
+const HOMOGLYPH: Record<string, string> = { 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x', 'ѕ': 's', 'і': 'i' };
 
 /** Spec minimum dictionary, as written in the spec (normalised below with the same rules as messages). */
 export const DICTIONARY_RAW = ['badword', 'bad_word', 'porn', 'scam', 'fuck', 'shit', 'bitch', 'asshole', 'idiot_spam'];
 
 /**
- * Lowercase, drop zero-width characters, apply the leetspeak map, and drop every other non-alphanumeric
+ * Decompose (NFKD, so diacritics and full-width forms fall away), lowercase, drop zero-width characters, map
+ * Cyrillic look-alikes to Latin, apply the leetspeak map, and drop every other non-alphanumeric
  * (the separators _ . / - * and trailing punctuation). `!` is ambiguous in the spec (1/!->i, yet s!c@m must
  * read as scam), so the caller picks how to fold it.
  */
 export function fold(token: string, bang: 'i' | ''): string {
   let out = '';
-  for (const ch of token.toLowerCase().replace(ZERO_WIDTH, '')) {
+  for (const ch of token.normalize('NFKD').toLowerCase().replace(ZERO_WIDTH, '')) {
     if (ch === '!') out += bang;
+    else if (Object.hasOwn(HOMOGLYPH, ch)) out += HOMOGLYPH[ch];
     else if (Object.hasOwn(LEET, ch)) out += LEET[ch];
     else if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) out += ch;
   }
@@ -26,9 +30,13 @@ export function fold(token: string, bang: 'i' | ''): string {
 
 const DICTIONARY = new Set(DICTIONARY_RAW.map((w) => fold(w, 'i')));
 
-/** A token is profane when either reading of `!` folds to a dictionary word exactly (no substring hits: "scampi" is clean). */
+/** A dictionary word exactly, or its plural with -s / -es (no substring hits: "scampi" is clean). */
+const inDictionary = (w: string) =>
+  DICTIONARY.has(w) || (w.endsWith('s') && DICTIONARY.has(w.slice(0, -1))) || (w.endsWith('es') && DICTIONARY.has(w.slice(0, -2)));
+
+/** A token is profane when either reading of `!` folds to a dictionary word or its plural. */
 export function isProfaneToken(token: string): boolean {
-  return DICTIONARY.has(fold(token, 'i')) || DICTIONARY.has(fold(token, ''));
+  return inDictionary(fold(token, 'i')) || inDictionary(fold(token, ''));
 }
 
 /** Replaces every offending whitespace-delimited token with *** in place, keeping all other text byte-for-byte. */

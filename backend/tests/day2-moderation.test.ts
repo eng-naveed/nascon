@@ -27,6 +27,10 @@ describe('profanity tokens (spec 5.8 rule 2 examples)', () => {
   it.each(['Clean', 'sports', 'commentary', 'scampi', 'classic', 'now!', 'shitake', 'assassin', 'stream', ''])('%s is clean', (t) =>
     expect(isProfaneToken(t)).toBe(false),
   );
+  it.each(['scams', 'bitches', 'a55hole', '5cam', 'fück', 'ѕсаm'])('%s is profane (plural, 5->s, diacritics, Cyrillic look-alikes)', (t) =>
+    expect(isProfaneToken(t)).toBe(true),
+  );
+  it.each(['Scunthorpe', 'pass', 'Scam-free', '3', '10', '1000000', 'fans'])('%s stays clean', (t) => expect(isProfaneToken(t)).toBe(false));
   it('every dictionary entry matches itself', () => {
     for (const w of DICTIONARY_RAW) expect(isProfaneToken(w)).toBe(true);
   });
@@ -38,6 +42,11 @@ describe('maskProfanity', () => {
   });
   it('masks every offending token and keeps whitespace', () => {
     expect(maskProfanity('sc@m  and\tp0rn here')).toEqual({ text: '***  and\t*** here', flagged: true });
+  });
+  it('masks the hardened variants and leaves look-alike clean text alone', () => {
+    expect(maskProfanity('no scams, bitches or a55hole 5cam fück ѕсаm')).toEqual({ text: 'no *** *** or *** *** *** ***', flagged: true });
+    for (const t of ['scampi', 'assassin', 'shitake', 'Scunthorpe', 'classic pass', 'Scam-free zone', '3 goals in 10 mins', '1000000 fans'])
+      expect(maskProfanity(t)).toEqual({ text: t, flagged: false });
   });
   it('leaves clean text untouched', () => {
     expect(maskProfanity('Clean sports commentary')).toEqual({ text: 'Clean sports commentary', flagged: false });
