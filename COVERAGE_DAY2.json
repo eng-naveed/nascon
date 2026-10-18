@@ -1,6 +1,6 @@
 {
-  "streaming": 0,
-  "costream": 0,
+  "streaming": 100,
+  "costream": 100,
   "qr_guest": 100,
   "moderation_dlq": 100,
   "observability": 100
