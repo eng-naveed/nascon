@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { pool } from '../../../core/db';
 import { getScore } from '../../events/service';
 import { playerExists } from '../common';
+import { followers } from '../athletes/follow';
+import { playerProfile } from '../athletes/profile';
 import { JS } from './client';
 import { CSS } from './styles';
 
@@ -66,6 +68,21 @@ async function teamNames(ids: string[]) {
   return (id: string) => m.get(id) ?? id;
 }
 
+/** Progressive registration modal (FR-4.4); any page that offers a member-only action includes it. */
+const AUTH_MODAL = `<div class="modal-bg" data-testid="progressive-auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-h" hidden>
+  <div class="dialog">
+    <h2 id="auth-h">Log in or register to continue</h2>
+    <p class="muted">Chatting, following and checkout need an account. Your cart and your place in the stream are kept.</p>
+    <form id="auth-form">
+      <label for="auth-email">Email</label><input id="auth-email" type="email" autocomplete="username" required>
+      <label for="auth-password">Password</label><input id="auth-password" type="password" autocomplete="current-password" required>
+      <p id="auth-error" class="err" role="alert"></p>
+      <div class="row"><button type="submit">Log in and continue</button><button type="button" class="secondary" id="modal-close">Keep watching</button></div>
+    </form>
+    <p class="muted">New here? Register at the venue desk or in the NaSCon app, then log in.</p>
+  </div>
+</div>`;
+
 /** Shared engagement column: pinned merch + guest cart + chat + the progressive auth modal. */
 function engage(pin: any, room: string) {
   return `<aside class="grid">
@@ -91,19 +108,7 @@ function engage(pin: any, room: string) {
   <p id="chat-error" class="err" role="alert"></p>
 </section>
 </aside>
-<div class="modal-bg" data-testid="progressive-auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-h" hidden>
-  <div class="dialog">
-    <h2 id="auth-h">Log in or register to continue</h2>
-    <p class="muted">Chatting and checkout need an account. Your cart and your place in the stream are kept.</p>
-    <form id="auth-form">
-      <label for="auth-email">Email</label><input id="auth-email" type="email" autocomplete="username" required>
-      <label for="auth-password">Password</label><input id="auth-password" type="password" autocomplete="current-password" required>
-      <p id="auth-error" class="err" role="alert"></p>
-      <div class="row"><button type="submit">Log in and continue</button><button type="button" class="secondary" id="modal-close">Keep watching</button></div>
-    </form>
-    <p class="muted">New here? Register at the venue desk or in the NaSCon app, then log in.</p>
-  </div>
-</div>`;
+${AUTH_MODAL}`;
 }
 
 function player(label: string) {
@@ -190,19 +195,39 @@ export async function webRoutes(app: FastifyInstance) {
   app.get('/web/players/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!ID.test(id) || !(await playerExists(pool, id))) return notFoundPage(reply, `Player ${id}`);
-    const r = await pool.query(
-      `SELECT coalesce(rp.name, u.name) AS name, rp.position, e.club_id, c.name AS club_name
-         FROM (SELECT $1::text AS id) x
-         LEFT JOIN roster_players rp ON rp.player_id = x.id
-         LEFT JOIN users u ON u.player_id = x.id
-         LEFT JOIN rbac_entities e ON e.kind='player' AND e.id = x.id
-         LEFT JOIN clubs c ON c.club_id = e.club_id`,
-      [id],
-    );
+    const [r, prof, fol] = await Promise.all([
+      pool.query(
+        `SELECT coalesce(rp.name, u.name) AS name, rp.position, e.club_id, c.name AS club_name
+           FROM (SELECT $1::text AS id) x
+           LEFT JOIN roster_players rp ON rp.player_id = x.id
+           LEFT JOIN users u ON u.player_id = x.id
+           LEFT JOIN rbac_entities e ON e.kind='player' AND e.id = x.id
+           LEFT JOIN clubs c ON c.club_id = e.club_id`,
+        [id],
+      ),
+      playerProfile(id),
+      followers(id),
+    ]);
     const p = r.rows[0] ?? {};
-    return page(reply, 200, layout(p.name ?? id, `<section class="card"><h1>${esc(p.name ?? id)}</h1><dl class="facts">
+    const c = prof.career;
+    const fixtures = prof.upcoming_fixtures.length
+      ? `<ul class="plain">${prof.upcoming_fixtures.map((m: any) => `<li><a href="/web/matches/${esc(m.match_id)}/preview">${esc(m.home)} v ${esc(m.away)}</a> <span class="muted">${esc(m.scheduled_at ?? 'time to be announced')}</span></li>`).join('')}</ul>`
+      : '<p class="muted">No upcoming fixtures.</p>';
+    const vods = prof.vod_archive.length
+      ? `<ul class="plain">${prof.vod_archive.map((v: any) => `<li>${esc(v.stream_key_label)} <span class="muted">${esc(v.status)}${v.ended_at ? ` · ${esc(new Date(v.ended_at).toISOString().slice(0, 16).replace('T', ' '))} UTC` : ''}</span></li>`).join('')}</ul>`
+      : '<p class="muted">No past streams yet.</p>';
+    const n = fol.follower_count;
+    const body = `<section class="card"><h1>${esc(p.name ?? id)}</h1><dl class="facts">
   <dt>Player id</dt><dd>${esc(id)}</dd><dt>Position</dt><dd>${esc(p.position ?? '-')}</dd>
-  <dt>Club</dt><dd>${p.club_id ? `<a href="/web/clubs/${esc(p.club_id)}">${esc(p.club_name ?? p.club_id)}</a>` : '-'}</dd></dl></section>`));
+  <dt>Club</dt><dd>${p.club_id ? `<a href="/web/clubs/${esc(p.club_id)}">${esc(p.club_name ?? p.club_id)}</a>` : '-'}</dd></dl>
+  <div class="row"><button type="button" id="follow-btn" aria-pressed="false">Follow</button>
+  <span id="follower-count" class="muted" aria-live="polite">${n} ${n === 1 ? 'follower' : 'followers'}</span></div></section>
+<section class="card" aria-labelledby="career-h"><h2 id="career-h">Career record</h2><dl class="facts">
+  <dt>Played</dt><dd>${c.matches_played}</dd><dt>Won</dt><dd>${c.wins}</dd><dt>Drawn</dt><dd>${c.draws}</dd><dt>Lost</dt><dd>${c.losses}</dd><dt>Goals / points</dt><dd>${c.goals_or_points}</dd></dl></section>
+<section class="card" aria-labelledby="fix-h"><h2 id="fix-h">Upcoming fixtures</h2>${fixtures}</section>
+<section class="card" aria-labelledby="vod-h"><h2 id="vod-h">Past streams</h2>${vods}</section>
+${AUTH_MODAL}`;
+    return page(reply, 200, layout(p.name ?? id, body, { kind: 'player', id }));
   });
 
   app.get('/web/clubs/:id', async (req, reply) => {

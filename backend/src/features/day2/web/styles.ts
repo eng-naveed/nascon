@@ -49,5 +49,6 @@ label{display:block;margin:8px 0 4px;font-weight:600}
 .people li.host{border-color:var(--accent);color:var(--accent)}
 dl.facts{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0}
 dl.facts dt{color:var(--muted)}dl.facts dd{margin:0}
+ul.plain{list-style:none;padding:0;margin:0}ul.plain li{padding:8px 0;border-bottom:1px solid var(--line)}
 .skip{position:absolute;left:-999px}.skip:focus{left:16px;top:8px;z-index:99;background:var(--card);padding:8px}
 `;

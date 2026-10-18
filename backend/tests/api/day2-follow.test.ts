@@ -54,6 +54,18 @@ describe('athlete follow/unfollow (FR-3.1)', () => {
     }
   });
 
+  it('followers reports `following` for a signed-in viewer only', async () => {
+    const get = (opts = {}) => call(ctx.app, 'GET', `/api/v1/players/${ATH}/followers`, undefined, opts);
+    expect((await get()).body).toEqual({ athlete_id: ATH, follower_count: 0 });
+    expect((await get(bearer(tok.viewer))).body.following).toBe(false);
+    await follow('viewer');
+    expect((await get(bearer(tok.viewer))).body).toEqual({ athlete_id: ATH, follower_count: 1, following: true });
+    expect((await get(bearer(tok.manager))).body.following).toBe(false);
+    expect((await get(bearer('not-a-jwt'))).body).toEqual({ athlete_id: ATH, follower_count: 1 });
+    const g = (await call(ctx.app, 'POST', '/api/v1/guest/session')).body.guest_token;
+    expect((await get(bearer(g))).body).toEqual({ athlete_id: ATH, follower_count: 1 });
+  });
+
   it('requires a token to follow or unfollow and refuses guest tokens', async () => {
     expect((await call(ctx.app, 'POST', `/api/v1/players/${ATH}/follow`)).status).toBe(401);
     expect((await call(ctx.app, 'DELETE', `/api/v1/players/${ATH}/follow`)).status).toBe(401);

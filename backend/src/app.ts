@@ -278,7 +278,16 @@ export function buildApp(): FastifyInstance {
   // ---- athlete follow/unfollow (FR-3.1): idempotent per (follower, athlete), count derived from rows ----
   app.post(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, true));
   app.delete(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, false));
-  app.get(`${V}/players/:id/followers`, async (req) => followers((req.params as any).id));
+  app.get(`${V}/players/:id/followers`, async (req) => {
+    let viewer = null;
+    try {
+      // optional: a member token adds `following`; guest, missing or invalid tokens get the public count only
+      if (req.headers.authorization && !/^Bearer\s+guest_/i.test(req.headers.authorization)) viewer = auth(req);
+    } catch {
+      viewer = null;
+    }
+    return followers((req.params as any).id, viewer);
+  });
   // ---- live audience chat (Phase II): guests read, members write ----
   app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
   app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));

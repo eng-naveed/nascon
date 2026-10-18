@@ -171,6 +171,33 @@ export const JS = String.raw`(function () {
     openModal({ type: 'checkout' });
   });
 
+  /* ---------- athlete follow (FR-3.1): members toggle, guests are asked to sign in ---------- */
+  var followBtn = $('#follow-btn'), following = false;
+  function followUrl() { return '/api/v1/players/' + encodeURIComponent(C.id); }
+  function renderFollow(n) {
+    if (n != null) text($('#follower-count'), n + (n === 1 ? ' follower' : ' followers'));
+    if (followBtn) { text(followBtn, following ? 'Following' : 'Follow'); followBtn.setAttribute('aria-pressed', String(following)); }
+  }
+  function loadFollow() {
+    if (!followBtn) return;
+    fetch(followUrl() + '/followers', { headers: member ? { Authorization: 'Bearer ' + member.token } : {} })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (j) { following = !!j.following; renderFollow(j.follower_count); } })
+      .catch(function () {});
+  }
+  function setFollow(on) {
+    if (!member) return openModal({ type: 'follow' });
+    return fetch(followUrl() + '/follow', { method: on ? 'POST' : 'DELETE', headers: { Authorization: 'Bearer ' + member.token } })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { s: r.status, j: j }; }); })
+      .then(function (res) {
+        if (res.s === 401) { member = null; session.del('nascon.member'); return openModal({ type: 'follow' }); }
+        if (res.s !== 200) return announce((res.j.error && res.j.error.message) || 'Could not update follow.');
+        following = res.j.following; renderFollow(res.j.follower_count);
+        announce(following ? 'You are following this athlete.' : 'You unfollowed this athlete.');
+      }).catch(function () { announce('Network problem, please retry.'); });
+  }
+  if (followBtn) followBtn.addEventListener('click', function () { setFollow(!following); });
+
   /* ---------- progressive registration modal (FR-4.4) ---------- */
   var modal = T('progressive-auth-modal'), lastFocus = null, pending = null;
   function focusables() { return Array.prototype.slice.call(modal.querySelectorAll('button,input,a[href]')).filter(function (e) { return !e.disabled; }); }
@@ -226,6 +253,8 @@ export const JS = String.raw`(function () {
           var at = session.get(resumeKey, null);
           if (video && at != null && Math.abs(video.currentTime - at) > 2) { try { video.currentTime = at; } catch (x) {} }
           if (p && p.type === 'chat' && p.text) return sendChat(p.text);
+          // follow is idempotent, so the action the guest asked for can simply be replayed as a member
+          if (p && p.type === 'follow') return setFollow(true);
         });
       }).catch(function () { text($('#auth-error'), 'Network problem, please retry.'); });
   });
@@ -233,6 +262,7 @@ export const JS = String.raw`(function () {
 
   /* ---------- boot ---------- */
   renderCart();
+  loadFollow();
   // attach the stream only after 'load': a media element fetching data delays the load event (Firefox waits
   // until it can decode), which would stall automated page loads
   if (document.readyState === 'complete') startVideo(); else window.addEventListener('load', startVideo, { once: true });

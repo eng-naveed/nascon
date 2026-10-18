@@ -27,7 +27,13 @@ export async function setFollow(user: { sub: string; player_id?: string | null }
   return { athlete_id: athleteId, follower_id: followerId, following, follower_count: await followerCount(athleteId) };
 }
 
-export async function followers(athleteId: string) {
+/** Follower count; with a signed-in viewer also whether they follow (so a client can render the toggle state). */
+export async function followers(athleteId: string, viewer?: { sub: string; player_id?: string | null } | null) {
   await assertAthlete(athleteId);
-  return { athlete_id: athleteId, follower_count: await followerCount(athleteId) };
+  const out: { athlete_id: string; follower_count: number; following?: boolean } = { athlete_id: athleteId, follower_count: await followerCount(athleteId) };
+  if (viewer) {
+    const r = await pool.query('SELECT 1 FROM follows WHERE follower_id=$1 AND athlete_id=$2', [viewer.player_id || viewer.sub, athleteId]);
+    out.following = !!r.rowCount;
+  }
+  return out;
 }

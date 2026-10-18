@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { boot, call, Ctx, uniq } from './setup';
+import { bearer, boot, call, Ctx, PASSWORD, uniq } from './setup';
 
 let ctx: Ctx;
 beforeAll(async () => {
@@ -92,6 +92,18 @@ describe('other QR targets', () => {
     expect((await get('/web/clubs/club-alpha-1')).body).toContain('Lions Park, Islamabad');
     for (const u of ['/web/players/player-nope', '/web/clubs/club-nope', '/web/matches/match-nope/live', '/web/matches/match-m1/other', '/web/clubs/bad%20id'])
       expect((await get(u)).statusCode, u).toBe(404);
+  });
+  it('player page shows the FR-3.1 profile, follower count and a follow button behind the auth modal', async () => {
+    const before = await get('/web/players/player-alpha-1');
+    expect(before.body).toContain('id="follow-btn"');
+    expect(before.body).toContain('0 followers');
+    expect(before.body).toContain('Career record');
+    expect(before.body).toContain('Upcoming fixtures');
+    expect(before.body).toContain('Past streams');
+    expect(count(before.body, 'progressive-auth-modal')).toBe(1);
+    const tok = (await call(ctx.app, 'POST', '/api/v1/auth/login', { email: 'viewer@nascon.test', password: PASSWORD })).body.token;
+    await call(ctx.app, 'POST', '/api/v1/players/player-alpha-1/follow', undefined, bearer(tok));
+    expect((await get('/web/players/player-alpha-1')).body).toContain('1 follower<');
   });
   it('the index lists matches with links to their current view', async () => {
     const r = await get('/web');
