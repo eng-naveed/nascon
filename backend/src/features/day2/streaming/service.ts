@@ -72,11 +72,21 @@ export async function streamKey(rawBody: unknown) {
 
     const key = b.stream_key_override ?? newStreamKey();
     const label = b.label ?? 'default';
+    if (b.stream_key_override) {
+      // per-key lock (always after the player lock) so two players racing for one new override cannot both pass
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['streamkey:' + key]);
+      const owner = await c.query('SELECT player_id, status FROM stream_keys WHERE stream_key=$1', [key]);
+      // a revoked key is dead for good (5.4); a superseded ('rotated') key of the same player may be re-activated
+      if (owner.rowCount && owner.rows[0].status === 'revoked')
+        throw conflict('KEY_REVOKED', 'This stream key has been revoked.', { stream_key: key });
+      if (owner.rowCount && owner.rows[0].player_id !== b.player_id)
+        throw conflict('STREAM_KEY_CONFLICT', 'This stream key belongs to another player.', { stream_key: key });
+    }
     const severed = await invalidateOthers(c, b.player_id, key, 'rotated');
-    // an override may name a key that already exists (graders re-use vector keys): take it over, never a raw INSERT
+    // an override may name the player's own existing key (graders re-use vector keys): refresh it, never a raw INSERT
     await c.query(
       `INSERT INTO stream_keys(stream_key, player_id, label, status) VALUES ($1,$2,$3,'active')
-       ON CONFLICT (stream_key) DO UPDATE SET player_id=$2, label=$3, status='active', revoked_at=NULL, created_at=now()`,
+       ON CONFLICT (stream_key) DO UPDATE SET label=$3, status='active', revoked_at=NULL, created_at=now()`,
       [key, b.player_id, label],
     );
     afterCommit(c, () => sever(severed));

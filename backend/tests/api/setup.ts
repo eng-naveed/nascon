@@ -26,6 +26,13 @@ export interface Ctx {
   close: () => Promise<void>;
 }
 
+/** Admin connection; a server-side termination must not surface as an unhandled 'error' event. */
+const adminClient = () => {
+  const c = new pg.Client({ connectionString: ADMIN_URL });
+  c.on('error', () => {});
+  return c;
+};
+
 let ipCounter = 0;
 /** A fresh client address per call site keeps the per-IP /api/v1 rate limiter out of the way. */
 export const freshIp = () => `10.${(ipCounter >> 16) & 255}.${(ipCounter >> 8) & 255}.${ipCounter++ & 255}`;
@@ -36,7 +43,7 @@ export const uniq = (p: string) => `${p}-${Date.now().toString(36)}-${(uid++).to
 
 export async function boot(name: string): Promise<Ctx> {
   const dbName = `t_${name.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}_${process.pid}`;
-  const admin = new pg.Client({ connectionString: ADMIN_URL });
+  const admin = adminClient();
   try {
     await admin.connect();
   } catch (e: any) {
@@ -73,8 +80,15 @@ export async function boot(name: string): Promise<Ctx> {
     close: async () => {
       await app.close();
       await db.pool.end();
-      const a = new pg.Client({ connectionString: ADMIN_URL });
+      const a = adminClient();
       await a.connect();
+      // pool.end() resolves before its idle sockets have closed: wait for the backends to go away so the
+      // forced drop does not terminate live connections (57P01)
+      for (let i = 0; i < 100; i++) {
+        const r = await a.query('SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=$1', [dbName]);
+        if (!r.rows[0].n) break;
+        await new Promise((res) => setTimeout(res, 50));
+      }
       await a.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
       await a.end();
     },

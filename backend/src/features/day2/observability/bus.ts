@@ -4,7 +4,8 @@
  * affects the writer or the other subscribers.
  */
 export type BusEvent = { type: string; [k: string]: unknown };
-type Handler = (e: BusEvent, topic: string) => void;
+/** May be async: a returned promise is only observed for its rejection, which is swallowed. */
+type Handler = (e: BusEvent, topic: string) => unknown;
 
 const subs = new Map<string, Set<Handler>>();
 
@@ -26,7 +27,9 @@ export function publish(topic: string, e: BusEvent): number {
   let n = 0;
   for (const h of [...(subs.get(topic) ?? []), ...(topic === ALL ? [] : (subs.get(ALL) ?? []))]) {
     try {
-      h(e, topic);
+      const r = h(e, topic);
+      // an async subscriber's rejection would otherwise be an unhandled rejection and take the process down
+      if (r && typeof (r as PromiseLike<unknown>).then === 'function') Promise.resolve(r).catch(() => {});
       n++;
     } catch {
       /* a broken subscriber is the hub's problem, not the writer's */
