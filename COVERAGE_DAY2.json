@@ -1,7 +1,7 @@
 {
   "streaming": 0,
   "costream": 0,
-  "qr_guest": 0,
+  "qr_guest": 100,
   "moderation_dlq": 100,
   "observability": 100
 }

@@ -33,6 +33,8 @@ describe('guest token matching', () => {
     expect(GUEST_TOKEN_RE.exec('Bearer eyJhbGciOi.x.y')).toBeNull();
     expect(GUEST_TOKEN_RE.exec('guest_anon_tok_7721')).toBeNull();
     expect(GUEST_TOKEN_RE.exec('Bearer guest_anon_tok_1 extra')).toBeNull();
+    expect(GUEST_TOKEN_RE.exec('Bearer guest_custom_42')?.[1]).toBe('guest_custom_42');
+    expect(GUEST_TOKEN_RE.exec('Bearer guest_')).toBeNull();
   });
   it('exempts only token issuing and the cart-merge probe', () => {
     expect([...GUEST_WRITE_EXEMPT].sort()).toEqual(['/api/v1/guest/session', '/audit/v1/guest/cart-merge']);
