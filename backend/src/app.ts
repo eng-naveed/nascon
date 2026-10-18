@@ -28,6 +28,7 @@ import { costreamSession } from './features/day2/costream/service';
 import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
 import { realtime } from './features/day2/observability/realtime';
 import { publish } from './features/day2/observability/bus';
+import { ntfyTopic } from './features/day2/observability/ntfy';
 import websocket from '@fastify/websocket';
 import { webRoutes } from './features/day2/web/pages';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
@@ -257,6 +258,11 @@ export function buildApp(): FastifyInstance {
   // ---- mobile / production routes (/api/v1) ----
   const V = '/api/v1';
   app.post(`${V}/guest/session`, async (_req, reply) => reply.status(201).send(await issueGuestSession()));
+  // personal push topics on the self-hosted ntfy server (no BaaS)
+  app.get(`${V}/me/notifications`, async (req) => {
+    const u = auth(req);
+    return { ntfy_port: 8090, topics: [u.sub, ...(u.player_id ? [u.player_id] : [])].map(ntfyTopic) };
+  });
   // ---- co-stream live controls (FR-3.3) ----
   app.post(`${V}/costream/:id/invites`, async (req, reply) => reply.status(201).send(await invite(auth(req), (req.params as any).id, req.body)));
   app.post(`${V}/costream/:id/join`, async (req) => join(auth(req), (req.params as any).id, req.body));

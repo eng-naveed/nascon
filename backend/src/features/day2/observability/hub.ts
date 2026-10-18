@@ -4,6 +4,7 @@ import { setGauge } from '../../../core/metrics';
 import { getScore } from '../../events/service';
 import { deliverWithRetry } from '../moderation/service';
 import { ALL, BusEvent, subscribe } from './bus';
+import { pushNtfy } from './ntfy';
 
 /**
  * Live fan-out hub (FR-5.2, NFR-1): WebSocket and SSE connections subscribe to topics; committed writes
@@ -77,6 +78,8 @@ export const DLQ_REASON_OFFLINE = 'subscriber_disconnected';
  */
 export async function notifyUser(userId: string, event: BusEvent, sleep?: (ms: number) => Promise<void>): Promise<boolean> {
   const topic = `user:${userId}`;
+  // a backgrounded phone gets it through ntfy whatever happens on the socket
+  void pushNtfy(userId, String(event.title ?? 'NaSCon Live'), String(event.message ?? event.type));
   const r = await deliverWithRetry(async () => broadcast(topic, event) > 0, sleep ? { sleep } : {});
   if (!r.delivered)
     await pool.query("INSERT INTO dlq_events(chat_room_id, event_id, attempts, status, reason) VALUES ($1,$2,$3,'dead',$4)", [

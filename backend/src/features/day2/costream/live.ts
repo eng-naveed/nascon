@@ -93,7 +93,9 @@ export async function invite(user: JwtClaims, sessionId: string, rawBody: unknow
     return { session_id: sessionId, player_id: b.player_id, invite_token: t.token, expires_at: t.expires_at, invited_by: user.sub };
   });
   // real-time delivery; an offline invitee goes through bounded retries to the DLQ (FR-5.2)
-  void notifyUser(b.player_id, { type: 'costream.invite', ...out }).catch(() => undefined);
+  void notifyUser(b.player_id, {
+    type: 'costream.invite', title: 'Co-stream invite', message: `You are invited to go live in ${sessionId}`, ...out,
+  }).catch(() => undefined);
   return out;
 }
 
