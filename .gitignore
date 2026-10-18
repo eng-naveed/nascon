@@ -8,3 +8,6 @@ coverage/
 *.log
 mobile/release/*.log
 !.env.example
+
+# local planning notes (not part of the submission)
+plan/
