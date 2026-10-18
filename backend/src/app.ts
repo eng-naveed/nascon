@@ -5,7 +5,7 @@ import { AppError, forbidden, notFound } from './core/errors';
 import { pool, tx } from './core/db';
 import { verifyPassword } from './core/crypto';
 import { idSchema, parse } from './core/validate';
-import { resetAndSeed } from './core/seed';
+import { needsBaselineSeed, resetAndSeed } from './core/seed';
 import { createSport, listSports } from './features/sports/service';
 import { generateFixtures } from './features/fixtures';
 import { createLeague, getStandings } from './features/standings/service';
@@ -15,7 +15,7 @@ import { checkout, inventory } from './features/store/service';
 import { authenticate, mintToken, probe, rbacMatrix } from './features/rbac/service';
 import { offlineSync } from './features/offline/service';
 import { getOrder, listQueue, transitionOrder } from './features/orders/service';
-import { inc, renderMetrics } from './core/metrics';
+import { getGauge, inc, METRICS_CONTENT_TYPE, renderMetrics } from './core/metrics';
 import { runHealth } from './core/health';
 import { GUEST_TOKEN_RE, GUEST_WRITE_EXEMPT } from './features/day2/common';
 
@@ -110,7 +110,8 @@ export function buildApp(): FastifyInstance {
   // ---- health ----
   app.get('/health', async (_req, reply) => {
     const h = await runHealth({
-      db: async () => (await pool.query('SELECT count(*)::int AS n FROM tenants')).rows[0].n > 0,
+      // DB up AND baseline seed present (Phase II markers included).
+      db: async () => !(await needsBaselineSeed(pool)),
       redisUrl: config.redisUrl,
       mediaApiUrl: config.mediaApiUrl,
     });
@@ -121,8 +122,28 @@ export function buildApp(): FastifyInstance {
 
   // ---- Prometheus metrics (text exposition format) ----
   app.get('/metrics', async (_req, reply) => {
-    const q = await pool.query('SELECT count(*)::int AS n FROM queue_events WHERE processed_at IS NULL').catch(() => null);
-    return reply.header('content-type', 'text/plain; version=0.0.4; charset=utf-8').send(renderMetrics({ queue_pending_events: q?.rows[0].n ?? 0 }));
+    const q = await pool
+      .query(
+        `SELECT (SELECT count(*) FROM queue_events WHERE processed_at IS NULL)::int AS queue,
+                (SELECT count(*) FROM stream_keys WHERE status = 'active')::int AS streams,
+                (SELECT count(*) FROM dlq_events)::int AS dlq,
+                (SELECT coalesce(sum(scan_count), 0) FROM qr_codes)::int AS scans`,
+      )
+      .catch(() => null);
+    const r = q?.rows[0] ?? { queue: 0, streams: 0, dlq: 0, scans: 0 };
+    // Spec 5.9: these five are always emitted, even when zero.
+    const body = renderMetrics(
+      {
+        queue_pending_events: r.queue,
+        nascon_active_ws_connections: getGauge('nascon_active_ws_connections'),
+        nascon_active_streams_total: r.streams,
+        nascon_stream_bitrate_kbps: getGauge('nascon_stream_bitrate_kbps'),
+        nascon_dlq_depth: r.dlq,
+        nascon_qr_scans_total: r.scans,
+      },
+      { nascon_active_streams_total: 'gauge', nascon_qr_scans_total: 'counter' },
+    );
+    return reply.header('content-type', METRICS_CONTENT_TYPE).send(body);
   });
 
   // ---- autograder contract ----

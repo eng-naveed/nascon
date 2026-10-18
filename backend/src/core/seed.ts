@@ -146,6 +146,19 @@ async function seedDemo(c: PoolClient) {
   });
 }
 
+/**
+ * True when the database lacks the baseline seed: no tenants (fresh volume) or no Phase II markers
+ * (a Day 1 volume that was never reset after the Day 2 upgrade).
+ */
+export async function needsBaselineSeed(db: Pick<PoolClient, 'query'>): Promise<boolean> {
+  const r = await db.query(
+    `SELECT (SELECT count(*) FROM tenants) > 0
+        AND EXISTS (SELECT 1 FROM matches WHERE match_id = 'match-m1')
+        AND EXISTS (SELECT 1 FROM qr_codes WHERE short_code = 'm1-live') AS seeded`,
+  );
+  return !r.rows[0].seeded;
+}
+
 /** Phase II baseline: live match-m1 (1 - 0), default QR mappings, a valid read-only guest token and an empty cart. */
 async function seedPhase2(c: PoolClient) {
   let n = 0;

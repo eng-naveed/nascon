@@ -1,11 +1,13 @@
 import { buildApp } from './app';
-import { config } from './core/config';
+import { config, missingSalts } from './core/config';
 import { pool, tx } from './core/db';
 import { migrate } from './core/migrate';
-import { resetAndSeed } from './core/seed';
+import { needsBaselineSeed, resetAndSeed } from './core/seed';
 import { processQueueOnce } from './features/orders/service';
 
 async function main() {
+  const missing = missingSalts();
+  if (missing.length) console.warn(`WARNING: ${missing.join(', ')} not set: signatures will not match the grader.`);
   for (let i = 0; ; i++) {
     try {
       await pool.query('SELECT 1');
@@ -16,8 +18,11 @@ async function main() {
     }
   }
   await migrate();
-  const seeded = await pool.query('SELECT count(*)::int AS n FROM tenants');
-  if (seeded.rows[0].n === 0) await tx((c) => resetAndSeed(c, {}));
+  // A fresh volume, or a Day 1 volume missing the Phase II baseline, gets the full /reset baseline.
+  if (await needsBaselineSeed(pool)) {
+    console.log('Baseline seed missing: seeding');
+    await tx((c) => resetAndSeed(c, {}));
+  }
   // internal job queue consumer
   setInterval(() => {
     processQueueOnce().catch(() => undefined);

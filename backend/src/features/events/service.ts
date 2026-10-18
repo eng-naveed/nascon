@@ -5,7 +5,7 @@ import { bodyHash, sign } from '../../core/crypto';
 import { AppError, conflict, notFound, validation } from '../../core/errors';
 import { idSchema, parse } from '../../core/validate';
 import { getSport } from '../sports/service';
-import { MatchMeta, SCORABLE, STATUS_EVENT_TYPES, StoredEvent, project, statusFromEvent } from './projection';
+import { GENERIC_STATUS_TYPES, MatchMeta, SCORABLE, STATUS_EVENT_TYPES, StoredEvent, project, statusFromEvent } from './projection';
 
 const envelope = z.object({
   event_id: idSchema,
@@ -22,8 +22,9 @@ const payloads: Record<string, z.ZodTypeAny> = {
   tiebreak_winner: z.object({ team_id: team }),
   match_end: z.object({}),
   compensation: z.object({ compensates: idSchema, reason: z.string().max(500).optional() }),
-  status_change: z.object({ status: z.enum(['postponed', 'cancelled', 'abandoned']), reason: z.string().max(500).optional() }),
 };
+const statusPayload = z.object({ status: z.enum(['postponed', 'cancelled', 'abandoned']), reason: z.string().max(500).optional() });
+for (const t of GENERIC_STATUS_TYPES) payloads[t] = statusPayload;
 for (const t of STATUS_EVENT_TYPES) if (!payloads[t]) payloads[t] = z.object({ reason: z.string().max(500).optional() });
 
 export async function loadEvents(db: Pick<PoolClient, 'query'>, matchId: string): Promise<StoredEvent[]> {

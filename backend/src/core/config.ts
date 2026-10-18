@@ -9,3 +9,8 @@ export const config = {
   redisUrl: process.env.REDIS_URL ?? '',
   mediaApiUrl: process.env.MEDIA_API_URL ?? '',
 };
+
+/** Names of signing salts that are empty: every signature would be computed with an empty key. */
+export function missingSalts(c: { salt: string; day2Salt: string } = config): string[] {
+  return [c.salt ? null : 'DAY1_SALT', c.day2Salt ? null : 'DAY2_SALT'].filter((n): n is string => n !== null);
+}

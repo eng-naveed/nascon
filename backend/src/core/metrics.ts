@@ -10,10 +10,24 @@ export function inc(name: string, labels: Record<string, string | number> = {}, 
   counters.set(key, (counters.get(key) ?? 0) + by);
 }
 
-export function renderMetrics(extra: Record<string, number> = {}): string {
+/** In-process gauges set by live subsystems (WS hub, media supervisor). */
+const gauges = new Map<string, number>();
+export const setGauge = (name: string, v: number) => void gauges.set(name, v);
+export const getGauge = (name: string) => gauges.get(name) ?? 0;
+
+export type MetricType = 'counter' | 'gauge';
+
+/** Exact Prometheus text exposition Content-Type required by the spec (no charset suffix). */
+export const METRICS_CONTENT_TYPE = 'text/plain; version=0.0.4';
+
+/**
+ * `types` overrides the suffix heuristic, e.g. nascon_active_streams_total is a gauge despite its name.
+ */
+export function renderMetrics(extra: Record<string, number> = {}, types: Record<string, MetricType> = {}): string {
   const lines: string[] = [];
   const seen = new Set<string>();
-  const typeOf = (n: string) => (n.endsWith('_total') || n.endsWith('_count') || n.endsWith('_sum') ? 'counter' : 'gauge');
+  const typeOf = (n: string): MetricType =>
+    types[n] ?? (n.endsWith('_total') || n.endsWith('_count') || n.endsWith('_sum') ? 'counter' : 'gauge');
   const emit = (key: string, v: number) => {
     const name = key.split('{')[0];
     if (!seen.has(name)) {
