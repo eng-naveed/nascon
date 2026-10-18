@@ -40,6 +40,10 @@ export async function loadToken() {
   }
   return token;
 }
+/** Current member JWT (null for guests), for WebSocket URLs that cannot carry headers. */
+export function getToken() {
+  return token;
+}
 export async function setToken(t: string | null) {
   token = t;
   try {

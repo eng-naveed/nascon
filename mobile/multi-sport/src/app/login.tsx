@@ -57,6 +57,7 @@ export default function Login() {
           <Button label="Sign in" icon="log-in" testID="login-submit" onPress={submit} loading={busy} />
           <Text style={s.lbl}>Quick fill a demo account (password Nascon@26)</Text>
           <Chips testIDPrefix="demo" value={email} onChange={(v) => { setEmail(v); setPassword('Nascon@26'); }} options={DEMOS} />
+          <Button label="Scan a match QR (no account needed)" icon="qr-code" variant="secondary" testID="login-scan" onPress={() => router.push('/scan')} />
           <Button label={`Server: ${serverUrl}`} icon="server" variant="secondary" testID="login-server-settings" onPress={() => router.push('/settings')} />
         </ScrollView>
       </KeyboardAvoidingView>

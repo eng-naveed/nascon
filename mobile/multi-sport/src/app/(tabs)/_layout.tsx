@@ -43,6 +43,19 @@ export default function TabsLayout() {
         headerRight: () => (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 4 }}>
           <SyncPill />
+          <Pressable testID="open-scan" accessibilityLabel="Scan a match QR code" accessibilityRole="button" onPress={() => router.push('/scan')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="qr-code-outline" size={24} color={C.text} />
+          </Pressable>
+          {session?.user.player_id ? (
+            <Pressable testID="open-golive" accessibilityLabel="Go live" accessibilityRole="button" onPress={() => router.push('/golive')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="radio-outline" size={24} color={C.live} />
+            </Pressable>
+          ) : null}
+          {session?.user.role === 'league_organizer' || session?.user.role === 'super_admin' ? (
+            <Pressable testID="open-create-match" accessibilityLabel="Create match" accessibilityRole="button" onPress={() => router.push('/create-match')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="add-circle-outline" size={24} color={C.text} />
+            </Pressable>
+          ) : null}
           <Pressable testID="open-settings" accessibilityLabel="Settings and account" accessibilityRole="button" onPress={() => router.push('/settings')} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="settings-outline" size={24} color={C.text} />
           </Pressable>

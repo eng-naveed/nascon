@@ -8,10 +8,12 @@ import { SyncBanner, SyncPill } from '@/components/SyncBar';
 import { useFonts, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
 import { C, F } from '@/theme';
 import { useAutoUpdate } from '@/hooks/useAutoUpdate';
+import { useNotifications } from '@/hooks/useNotifications';
 
 function Inner() {
   const { ready, session } = useApp();
   const insets = useSafeAreaInsets();
+  useNotifications(!!session);
   const [fontsLoaded, fontError] = useFonts({ BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold });
   if (!ready || (!fontsLoaded && !fontError))
     return (
@@ -48,7 +50,13 @@ function Inner() {
               <Stack.Screen name="checkout" options={{ title: 'Cart & checkout' }} />
               <Stack.Screen name="receipt" options={{ title: 'Receipt' }} />
               <Stack.Screen name="sync" options={{ title: 'Sync status' }} />
+              <Stack.Screen name="golive" options={{ title: 'Go live' }} />
+              <Stack.Screen name="create-match" options={{ title: 'Create match' }} />
             </Stack.Protected>
+            {/* public: QR scans and nascon:// deep links open straight into the content, never the login wall */}
+            <Stack.Screen name="entity/[id]" options={{ title: 'Live match' }} />
+            <Stack.Screen name="stream/[id]" options={{ title: 'Co-stream' }} />
+            <Stack.Screen name="scan" options={{ title: 'Scan QR' }} />
             <Stack.Screen name="settings" options={{ title: 'Settings' }} />
           </Stack>
         </View>
