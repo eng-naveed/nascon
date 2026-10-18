@@ -31,7 +31,6 @@ import { publish } from './features/day2/observability/bus';
 import { ntfyTopic } from './features/day2/observability/ntfy';
 import websocket from '@fastify/websocket';
 import { webRoutes } from './features/day2/web/pages';
-import { athleteProfile, setFollow } from './features/day2/athletes/service';
 import { clearModerationCache, moderationProbe } from './features/day2/moderation/service';
 import { clearChatState, listChat, moderate, postChat } from './features/day2/moderation/chat';
 
@@ -272,18 +271,6 @@ export function buildApp(): FastifyInstance {
     auth(req);
     return scanStats((req.params as any).id);
   });
-  // ---- athlete identity + social graph (FR-3.1): profile is public, follow needs a member token ----
-  app.get(`${V}/players/:id/profile`, async (req) => {
-    let viewer = null;
-    try {
-      if (req.headers.authorization && !/^Bearer\s+guest_/i.test(req.headers.authorization)) viewer = auth(req);
-    } catch {
-      viewer = null; // an invalid token just means an anonymous view of a public page
-    }
-    return athleteProfile((req.params as any).id, viewer);
-  });
-  app.post(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, true));
-  app.delete(`${V}/players/:id/follow`, async (req) => setFollow(auth(req), (req.params as any).id, false));
   // ---- live audience chat (Phase II): guests read, members write ----
   app.post(`${V}/chat`, async (req, reply) => reply.status(201).send(await postChat(auth(req), req.body)));
   app.get(`${V}/chat/:room/messages`, async (req) => listChat((req.params as any).room, q(req)));

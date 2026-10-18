@@ -37,8 +37,6 @@ export async function eraseUser(id: string) {
     await c.query("UPDATE roster_players SET name = 'Erased Player' WHERE player_id = ANY($1)", [list]);
     await c.query("UPDATE chat_messages SET sender = 'erased-' || md5(sender) WHERE sender = ANY($1)", [list]);
     await c.query("UPDATE guest_tokens SET status = 'wiped', merged_user_id = NULL, merged_response = NULL WHERE merged_user_id = ANY($1)", [list]);
-    // the social graph links an erased account to the athletes it followed: drop those rows (counts stay count(*))
-    await c.query('DELETE FROM follows WHERE follower_id = ANY($1)', [list]);
     await c.query('INSERT INTO erased_users(user_id) SELECT unnest($1::text[]) ON CONFLICT DO NOTHING', [list]);
     return list;
   });
