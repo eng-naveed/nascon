@@ -343,3 +343,13 @@ describe('DELETE /audit/v1/privacy/user/{user_id} (spec 5.9, NFR-9)', () => {
     expect((await login('player@nascon.test')).status).toBe(200);
   });
 });
+
+describe('GET /api/v1/q/{code} (in-app scanner resolution)', () => {
+  it('returns the live target as JSON and counts the scan; unknown -> 404 QR_NOT_FOUND', async () => {
+    const r = await call(ctx.app, 'GET', '/api/v1/q/m1-live');
+    expect([r.status, r.body]).toEqual([200, { short_code: 'm1-live', target_route: '/web/matches/match-m1/live' }]);
+    expect((await qr('match-m1', '?inspect=true')).body.scan_count).toBe(1);
+    const nf = await call(ctx.app, 'GET', '/api/v1/q/nope-code');
+    expect([nf.status, nf.body.error.code]).toEqual([404, 'QR_NOT_FOUND']);
+  });
+});

@@ -105,6 +105,15 @@ describe('other QR targets', () => {
     await call(ctx.app, 'POST', '/api/v1/players/player-alpha-1/follow', undefined, bearer(tok));
     expect((await get('/web/players/player-alpha-1')).body).toContain('1 follower<');
   });
+  it('player page embeds the live video and chat while the athlete holds an active stream key', async () => {
+    expect((await get('/web/players/player-alpha-1')).body).not.toContain('data-testid="guest-video-player"');
+    const k = (await call(ctx.app, 'POST', '/audit/v1/stream/key', { action: 'generate', player_id: 'player-alpha-1' })).body.stream_key;
+    const live = (await get('/web/players/player-alpha-1')).body;
+    expect(live).toContain('data-testid="guest-video-player"');
+    expect(live).toContain('data-testid="chat-input-field"');
+    expect(live).toContain(`/live/${k}/index.m3u8`);
+    expect(live).toContain('chat-live-player-alpha-1');
+  });
   it('the index lists matches with links to their current view', async () => {
     const r = await get('/web');
     expect(r.body).toContain('href="/web/matches/match-m1/live"');
