@@ -29,6 +29,7 @@ import { costreamSession } from './features/day2/costream/service';
 import { control, invite, join, onBroadcaster } from './features/day2/costream/live';
 import { realtime } from './features/day2/observability/realtime';
 import { playerProfile } from './features/day2/athletes/profile';
+import { athleteLive } from './features/day2/athletes/live';
 import { publish } from './features/day2/observability/bus';
 import { ntfyTopic } from './features/day2/observability/ntfy';
 import websocket from '@fastify/websocket';
@@ -232,6 +233,12 @@ export function buildApp(): FastifyInstance {
     const to = await resolveShortCode((req.params as any).code, ua(req));
     return reply.status(302).header('location', to).header('cache-control', 'no-store').send();
   });
+  // same resolution as /q/{code} (counts the scan) but as JSON, for the in-app scanner: no redirect to follow
+  app.get('/api/v1/q/:code', async (req, reply) => {
+    const code = (req.params as any).code;
+    const to = await resolveShortCode(code, ua(req));
+    return reply.header('cache-control', 'no-store').send({ short_code: code, target_route: to });
+  });
   app.post(`${A}/guest/cart-merge`, async (req) => cartMerge(req.body));
   // ---- creator streaming + co-streams (Phase II streaming / costream) ----
   app.post(`${A}/stream/key`, async (req, reply) => send(reply, await streamKey(req.body)));
@@ -267,6 +274,8 @@ export function buildApp(): FastifyInstance {
   });
   // athlete profile (FR-3.1): public, read-only
   app.get(`${V}/players/:id/profile`, async (req) => playerProfile((req.params as any).id));
+  // athlete live status (FR-3.2): public; where to watch the solo broadcast and which chat room to join
+  app.get(`${V}/players/:id/live`, async (req) => athleteLive((req.params as any).id));
   // ---- co-stream live controls (FR-3.3) ----
   app.post(`${V}/costream/:id/invites`, async (req, reply) => reply.status(201).send(await invite(auth(req), (req.params as any).id, req.body)));
   app.post(`${V}/costream/:id/join`, async (req) => join(auth(req), (req.params as any).id, req.body));

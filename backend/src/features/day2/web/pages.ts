@@ -5,6 +5,7 @@ import { getScore } from '../../events/service';
 import { playerExists } from '../common';
 import { followers } from '../athletes/follow';
 import { playerProfile } from '../athletes/profile';
+import { athleteLive } from '../athletes/live';
 import { JS } from './client';
 import { CSS } from './styles';
 
@@ -41,7 +42,7 @@ function layout(title: string, body: string, cfg?: object, withVideo = false) {
 <body><a class="skip" href="#main">Skip to content</a>
 <header class="row"><span class="brand">NaSCon '26 LIVE</span><span id="who" class="muted"></span></header>
 <main id="main">${body}</main>
-<footer>Watching as a guest: no app or account needed. <span id="live-status" role="status" aria-live="polite"></span></footer>
+<footer><span id="guest-note">Watching as a guest: no app or account needed.</span> <span id="live-status" role="status" aria-live="polite"></span></footer>
 ${scripts}</body></html>`;
 }
 
@@ -195,7 +196,7 @@ export async function webRoutes(app: FastifyInstance) {
   app.get('/web/players/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!ID.test(id) || !(await playerExists(pool, id))) return notFoundPage(reply, `Player ${id}`);
-    const [r, prof, fol] = await Promise.all([
+    const [r, prof, fol, live] = await Promise.all([
       pool.query(
         `SELECT coalesce(rp.name, u.name) AS name, rp.position, e.club_id, c.name AS club_name
            FROM (SELECT $1::text AS id) x
@@ -207,6 +208,7 @@ export async function webRoutes(app: FastifyInstance) {
       ),
       playerProfile(id),
       followers(id),
+      athleteLive(id),
     ]);
     const p = r.rows[0] ?? {};
     const c = prof.career;
@@ -217,7 +219,21 @@ export async function webRoutes(app: FastifyInstance) {
       ? `<ul class="plain">${prof.vod_archive.map((v: any) => `<li>${esc(v.stream_key_label)} <span class="muted">${esc(v.status)}${v.ended_at ? ` · ${esc(new Date(v.ended_at).toISOString().slice(0, 16).replace('T', ' '))} UTC` : ''}</span></li>`).join('')}</ul>`
       : '<p class="muted">No past streams yet.</p>';
     const n = fol.follower_count;
-    const body = `<section class="card"><h1>${esc(p.name ?? id)}</h1><dl class="facts">
+    // live now: the athlete's solo broadcast + its chat room (same room the broadcaster's app shows)
+    const liveBlock = live.live
+      ? `<section class="card" aria-labelledby="live-h"><h2 id="live-h">Live now</h2>${player(`${p.name ?? id} live`)}</section>
+<section class="card" aria-labelledby="chat-h">
+  <h2 id="chat-h">Live chat</h2>
+  <ul class="chat-log" data-testid="chat-message-list" role="log" aria-live="polite" aria-label="Chat messages" tabindex="0"></ul>
+  <form class="chatform" id="chat-form">
+    <label for="chat-input">Say something</label>
+    <input id="chat-input" type="text" maxlength="500" autocomplete="off" data-testid="chat-input-field" aria-describedby="chat-error">
+    <button type="button" data-testid="chat-send-btn">Send</button>
+  </form>
+  <p id="chat-error" class="err" role="alert"></p>
+</section>`
+      : '';
+    const body = `${liveBlock}<section class="card"><h1>${esc(p.name ?? id)}</h1><dl class="facts">
   <dt>Player id</dt><dd>${esc(id)}</dd><dt>Position</dt><dd>${esc(p.position ?? '-')}</dd>
   <dt>Club</dt><dd>${p.club_id ? `<a href="/web/clubs/${esc(p.club_id)}">${esc(p.club_name ?? p.club_id)}</a>` : '-'}</dd></dl>
   <div class="row"><button type="button" id="follow-btn" aria-pressed="false">Follow</button>
@@ -227,7 +243,8 @@ export async function webRoutes(app: FastifyInstance) {
 <section class="card" aria-labelledby="fix-h"><h2 id="fix-h">Upcoming fixtures</h2>${fixtures}</section>
 <section class="card" aria-labelledby="vod-h"><h2 id="vod-h">Past streams</h2>${vods}</section>
 ${AUTH_MODAL}`;
-    return page(reply, 200, layout(p.name ?? id, body, { kind: 'player', id }));
+    const cfg = live.live ? { kind: 'player', id, room: live.chat_room_id, hls: `/${live.hls_path}/index.m3u8` } : { kind: 'player', id };
+    return page(reply, 200, layout(p.name ?? id, body, cfg, live.live));
   });
 
   app.get('/web/clubs/:id', async (req, reply) => {

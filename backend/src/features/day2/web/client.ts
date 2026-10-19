@@ -247,6 +247,7 @@ export const JS = String.raw`(function () {
         member = { token: res.j.token, user: res.j.user }; session.set('nascon.member', member);
         $('#auth-password').value = '';
         text($('#who'), 'Signed in as ' + (res.j.user.name || res.j.user.email));
+        text($('#guest-note'), 'Signed in: chat and checkout are unlocked.');
         return mergeCart().then(function () {
           var p = pending; pending = null; closeModal();
           // resume exactly where the guest was watching
@@ -259,6 +260,7 @@ export const JS = String.raw`(function () {
       }).catch(function () { text($('#auth-error'), 'Network problem, please retry.'); });
   });
   if (member) text($('#who'), 'Signed in as ' + ((member.user && (member.user.name || member.user.email)) || 'member'));
+  if (member) text($('#guest-note'), 'Signed in: chat and checkout are unlocked.');
 
   /* ---------- boot ---------- */
   renderCart();
