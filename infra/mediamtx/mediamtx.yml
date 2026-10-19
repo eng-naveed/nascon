@@ -27,6 +27,8 @@ hlsAllowOrigin: '*'
 webrtcAddress: :8889
 webrtcAllowOrigin: '*'
 webrtcLocalUDPAddress: :8189
+# Docker answers with container-IP candidates; also offer the published host port so desktop browsers (WHEP) connect.
+webrtcAdditionalHosts: [127.0.0.1]
 
 srt: no
 
