@@ -66,16 +66,24 @@ export async function routeForScan(data: string): Promise<string | null> {
   const d = data.trim();
   const deep = /^nascon:\/\/(entity|stream)\/([A-Za-z0-9_.:-]+)/.exec(d);
   if (deep) return `/${deep[1]}/${deep[2]}`;
-  let path: string;
-  try {
-    path = new URL(d).pathname;
-  } catch {
-    return null;
-  }
-  if (path.startsWith('/q/')) {
-    // the printed short URL names the grader's localhost: resolve it against our server, keep the live target
-    const r = await fetch(getBaseUrl() + path, { method: 'GET' });
-    path = new URL(r.url).pathname;
+  // parse with a regex: React Native's URL polyfill does not implement every getter on every engine
+  const m = /^https?:\/\/[^/?#]+(\/[^?#]*)?/i.exec(d);
+  if (!m) return null;
+  let path = m[1] ?? '/';
+  const q = /^\/q\/([A-Za-z0-9_.:-]+)/.exec(path);
+  if (q) {
+    // the printed short URL names the grader's localhost: resolve the code on OUR server as JSON (counts the scan,
+    // keeps the live target) instead of following a redirect, which not every fetch implementation exposes
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const r = await fetch(`${getBaseUrl()}/api/v1/q/${encodeURIComponent(q[1])}`, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error(`QR resolve failed (${r.status})`);
+      path = (await r.json()).target_route ?? '';
+    } finally {
+      clearTimeout(t);
+    }
   }
   return routeForWebPath(path);
 }

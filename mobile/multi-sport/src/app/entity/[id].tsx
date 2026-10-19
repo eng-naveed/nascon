@@ -92,6 +92,7 @@ type Profile = {
   vod_archive: { stream_key_label: string; status: string; ended_at: string | null; playback_url: string | null }[];
 };
 type Followers = { follower_count: number; following?: boolean };
+type Live = { live: boolean; hls_path: string | null; chat_room_id: string };
 
 function ProfileLink({ id }: { id: string }) {
   const isClub = id.startsWith('club-');
@@ -117,17 +118,20 @@ function AthleteProfile({ id }: { id: string }) {
   const { session } = useApp();
   const [p, setP] = useState<Profile | null>(null);
   const [f, setF] = useState<Followers | null>(null);
+  const [live, setLive] = useState<Live | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try {
       const enc = encodeURIComponent(id);
-      const [prof, fol] = await Promise.all([
+      const [prof, fol, lv] = await Promise.all([
         api<Profile>(`/api/v1/players/${enc}/profile`, { auth: false }),
         api<Followers>(`/api/v1/players/${enc}/followers`, { auth: !!session }),
+        api<Live>(`/api/v1/players/${enc}/live`, { auth: false }).catch(() => null),
       ]);
       setP(prof);
       setF(fol);
+      setLive(lv);
       setErr(null);
     } catch (e) {
       setErr(friendly(e));
@@ -156,6 +160,16 @@ function AthleteProfile({ id }: { id: string }) {
     <Screen testID="screen-entity-profile" onRefresh={load}>
       <Stack.Screen options={{ title: 'Athlete' }} />
       {err ? <ErrorBanner message={err} onRetry={load} /> : null}
+      {live?.live && live.hls_path ? (
+        <View style={{ gap: 8 }} testID="athlete-live">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <StatusBadge status="in_progress" />
+            <Text style={s.h}>Live now</Text>
+          </View>
+          <LivePlayer uri={hlsUrl(live.hls_path)} label={`${p?.name ?? id} live`} testID="athlete-live-video" />
+          <LiveChat room={live.chat_room_id} prefix="live" inline />
+        </View>
+      ) : null}
       <Card testID="entity-profile">
         <View style={{ alignItems: 'center', gap: 6 }}>
           <TeamMark id={id} name={p?.name ?? id} size={64} />

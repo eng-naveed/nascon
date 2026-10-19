@@ -91,7 +91,7 @@ export default function Checkout() {
               </View>
             </Card>
           ))}
-          <Field label="Discount code (optional)" testID="discount-code" value={code} onChangeText={setCode} autoCapitalize="characters" placeholder="WELCOME10" />
+          <Field label="Discount code (optional)" testID="discount-code" value={code} onChangeText={setCode} autoCapitalize="characters" placeholder="Enter a code" />
           <Text style={{ color: C.text, fontSize: 14, fontWeight: '700' }}>Payment (mock gateway)</Text>
           <Chips testIDPrefix="pay" value={token} onChange={setToken} options={TOKENS} />
           <Card>

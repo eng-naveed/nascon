@@ -113,8 +113,8 @@ export function LiveChat({ room, prefix, style, inline }: { room: string; prefix
         </View>
       ) : showLogin ? (
         <View style={{ gap: 8 }}>
-          <Field label="Email" testID="login-email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-          <Field label="Password" testID="login-password" value={password} onChangeText={setPassword} secureTextEntry />
+          <Field label="Email" testID="login-email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" />
+          <Field label="Password" testID="login-password" value={password} onChangeText={setPassword} secureTextEntry returnKeyType="go" onSubmitEditing={signIn} />
           <Button testID="login-submit" label="Log in and chat" onPress={signIn} loading={busy} />
         </View>
       ) : (
